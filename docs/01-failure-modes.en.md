@@ -1,8 +1,11 @@
-# 01 · Failure-mode inventory
+# 🔥 01 · Failure-mode inventory
 
 Grouped by **which layer breaks**. Every entry is tagged **[measured]** or **[inferred]** — I don't want guesses dressed up as conclusions.
 
-[中文](01-failure-modes.md) ｜ English (this file)
+<p>
+  <a href="01-failure-modes.en.md"><img alt="English" src="https://img.shields.io/badge/English-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="01-failure-modes.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 ---
 

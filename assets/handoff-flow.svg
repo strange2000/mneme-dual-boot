@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-label="The daily loop: boot, open, use, close, shut down — alternating between macOS and Windows on one shared volume">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#101a25"/>
+    </linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#58a6ff"/>
+    </marker>
+    <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b949e"/>
+    </marker>
+    <style>
+      .t{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans CJK SC','Microsoft YaHei',sans-serif}
+      .m{font-family:'SF Mono',ui-monospace,Consolas,monospace}
+    </style>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="519" rx="18" fill="url(#bg)" stroke="#30363d"/>
+
+  <text class="t" x="40" y="46" font-size="19" font-weight="600" fill="#e6edf3">The daily loop · 每天这一圈</text>
+  <text class="t" x="1160" y="46" font-size="13.5" fill="#6e7681" text-anchor="end">两系统互斥 · never both at once</text>
+
+  <!-- lane labels -->
+  <rect x="36" y="74" width="126" height="48" rx="10" fill="#161b22" stroke="#30363d"/>
+  <text class="t" x="99" y="95" font-size="14" fill="#e6edf3" text-anchor="middle" font-weight="600">macOS</text>
+  <text class="t" x="99" y="112" font-size="11" fill="#6e7681" text-anchor="middle">boot → …</text>
+
+  <rect x="36" y="296" width="126" height="48" rx="10" fill="#161b22" stroke="#30363d"/>
+  <text class="t" x="99" y="317" font-size="14" fill="#e6edf3" text-anchor="middle" font-weight="600">Windows</text>
+  <text class="t" x="99" y="334" font-size="11" fill="#6e7681" text-anchor="middle">boot → …</text>
+
+  <!-- lane A boxes -->
+  <g class="m" font-size="14">
+    <rect x="180" y="70" width="170" height="56" rx="10" fill="#0d1117" stroke="#1f6feb"/>
+    <text x="265" y="94" fill="#79c0ff" text-anchor="middle">open</text>
+    <text class="t" x="265" y="112" font-size="11" fill="#6e7681" text-anchor="middle">验收据 · 写 DIRTY</text>
+
+    <rect x="380" y="70" width="170" height="56" rx="10" fill="#0d1117" stroke="#30363d"/>
+    <text x="465" y="94" fill="#e6edf3" text-anchor="middle">use</text>
+    <text class="t" x="465" y="112" font-size="11" fill="#6e7681" text-anchor="middle">DSH 写记忆</text>
+
+    <rect x="580" y="70" width="170" height="56" rx="10" fill="#0d1117" stroke="#1f6feb"/>
+    <text x="665" y="94" fill="#79c0ff" text-anchor="middle">close</text>
+    <text class="t" x="665" y="112" font-size="11" fill="#6e7681" text-anchor="middle">checkpoint · 收据</text>
+
+    <rect x="780" y="70" width="170" height="56" rx="10" fill="#0d1117" stroke="#f85149"/>
+    <text x="865" y="94" fill="#ffa198" text-anchor="middle">shutdown</text>
+    <text class="t" x="865" y="112" font-size="11" fill="#6e7681" text-anchor="middle">此时库已封</text>
+  </g>
+
+  <!-- lane B boxes -->
+  <g class="m" font-size="14">
+    <rect x="180" y="292" width="170" height="56" rx="10" fill="#0d1117" stroke="#1f6feb"/>
+    <text x="265" y="316" fill="#79c0ff" text-anchor="middle">open</text>
+    <text class="t" x="265" y="334" font-size="11" fill="#6e7681" text-anchor="middle">验收据 · 写 DIRTY</text>
+
+    <rect x="380" y="292" width="170" height="56" rx="10" fill="#0d1117" stroke="#30363d"/>
+    <text x="465" y="316" fill="#e6edf3" text-anchor="middle">use</text>
+    <text class="t" x="465" y="334" font-size="11" fill="#6e7681" text-anchor="middle">DSH 写记忆</text>
+
+    <rect x="580" y="292" width="170" height="56" rx="10" fill="#0d1117" stroke="#1f6feb"/>
+    <text x="665" y="316" fill="#79c0ff" text-anchor="middle">close</text>
+    <text class="t" x="665" y="334" font-size="11" fill="#6e7681" text-anchor="middle">checkpoint · 收据</text>
+
+    <rect x="780" y="292" width="170" height="56" rx="10" fill="#0d1117" stroke="#f85149"/>
+    <text x="865" y="316" fill="#ffa198" text-anchor="middle">shutdown</text>
+    <text class="t" x="865" y="334" font-size="11" fill="#6e7681" text-anchor="middle">此时库已封</text>
+  </g>
+
+  <!-- in-lane arrows -->
+  <g stroke="#58a6ff" stroke-width="2" marker-end="url(#ar)" fill="none">
+    <path d="M 354 98 L 374 98"/>
+    <path d="M 554 98 L 574 98"/>
+    <path d="M 754 98 L 774 98"/>
+    <path d="M 354 320 L 374 320"/>
+    <path d="M 554 320 L 574 320"/>
+    <path d="M 754 320 L 774 320"/>
+  </g>
+
+  <!-- alternation connector -->
+  <path d="M 975 130 L 975 288" stroke="#8b949e" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#ar2)" marker-start="url(#ar2)"/>
+
+  <text class="t" x="600" y="200" font-size="14" fill="#8b949e" text-anchor="middle">同一块 exFAT 卷 · 同一份 <tspan class="m" fill="#79c0ff">state.db</tspan></text>
+  <text class="t" x="600" y="222" font-size="13" fill="#6e7681" text-anchor="middle">换的是操作系统，不是文件 —— nothing is copied, nothing is merged</text>
+
+  <!-- legend -->
+  <rect x="36" y="392" width="1128" height="92" rx="12" fill="#161b22" stroke="#30363d"/>
+  <text class="t" x="60" y="420" font-size="13" fill="#6e7681" letter-spacing="0.5">三个东西必须一起搬 · the handoff unit is the directory, not just the database</text>
+  <g class="m" font-size="13">
+    <rect x="60" y="434" width="150" height="30" rx="8" fill="#0d1117" stroke="#238636"/>
+    <text x="74" y="454" fill="#7ee787">state.db</text>
+    <text class="t" x="196" y="454" fill="#6e7681" text-anchor="end" font-size="11">真源</text>
+
+    <rect x="230" y="434" width="170" height="30" rx="8" fill="#0d1117" stroke="#1f6feb"/>
+    <text x="244" y="454" fill="#79c0ff">handoff.json</text>
+    <text class="t" x="386" y="454" fill="#6e7681" text-anchor="end" font-size="11">收据</text>
+
+    <rect x="420" y="434" width="120" height="30" rx="8" fill="#0d1117" stroke="#9e6a03"/>
+    <text x="434" y="454" fill="#e3b341">DIRTY</text>
+    <text class="t" x="526" y="454" fill="#6e7681" text-anchor="end" font-size="11">脏标志</text>
+  </g>
+  <text class="t" x="580" y="454" font-size="12.5" fill="#6e7681">← <tspan class="m" fill="#8b949e">handoff.mjs</tspan> 负责写它、删它、验它；任何一步失败就不发收据。</text>
+</svg>

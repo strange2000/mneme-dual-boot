@@ -1,6 +1,9 @@
-# 02 · 交接协议规范 v0
+# 🧭 02 · 交接协议规范 v0
 
-[English](02-handoff-protocol.en.md) ｜ 中文（本文）
+<p>
+  <a href="02-handoff-protocol.en.md"><img alt="Read in English" src="https://img.shields.io/badge/English-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="02-handoff-protocol.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 > **一句话**：进之前先验，出之前先封；凡是没封的，一律不信。
 > **适用**：同一台机器、两个操作系统轮流开机（互斥），数据是共享卷上的单个文件。
@@ -219,6 +222,10 @@ F4  原库留在原处**不删除**，至少保留到另一端成功打开过一
 ---
 
 ## 8. 状态机
+
+<p align="center">
+  <img src="../assets/state-machine.svg" alt="交接状态机：CHECKING → OPENED → CLOSING → SEALED，异常时进入 RECOVERING" width="100%">
+</p>
 
 ```
                  ┌────────────┐

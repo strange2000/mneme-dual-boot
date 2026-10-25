@@ -1,8 +1,11 @@
-# 04 · Why **not** to sync at all
+# 🚫 04 · Why **not** to sync at all
 
 This document records the designs that were rejected, and why. It exists because almost everyone who sees "dual boot + one copy of the data" thinks "just put a sync tool on it and you're done".
 
-[中文](04-why-not-sync.md) ｜ English (this file)
+<p>
+  <a href="04-why-not-sync.en.md"><img alt="English" src="https://img.shields.io/badge/English-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="04-why-not-sync.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 ---
 

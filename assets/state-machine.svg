@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="490" viewBox="0 0 1100 490" role="img" aria-label="Handoff state machine: CHECKING to OPENED to CLOSING to SEALED, with RECOVERING entered from CHECKING or CLOSING">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#101a25"/>
+    </linearGradient>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#58a6ff"/>
+    </marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d29922"/>
+    </marker>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b949e"/>
+    </marker>
+    <style>
+      .t{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans CJK SC','Microsoft YaHei',sans-serif}
+      .m{font-family:'SF Mono',ui-monospace,Consolas,monospace}
+    </style>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1099" height="489" rx="18" fill="url(#bg2)" stroke="#30363d"/>
+  <text class="t" x="40" y="42" font-size="18" font-weight="600" fill="#e6edf3">Handoff state machine · 交接状态机</text>
+  <text class="t" x="1060" y="42" font-size="13" fill="#6e7681" text-anchor="end">protocol v0</text>
+
+  <!-- CHECKING -->
+  <rect x="50" y="70" width="214" height="86" rx="12" fill="#161b22" stroke="#8b949e"/>
+  <text class="m" x="157" y="102" font-size="15" fill="#e6edf3" text-anchor="middle" font-weight="600">CHECKING</text>
+  <text class="t" x="157" y="124" font-size="11.5" fill="#8b949e" text-anchor="middle">读收据 + sha256 + integrity</text>
+  <text class="t" x="157" y="141" font-size="11.5" fill="#6e7681" text-anchor="middle">read-only · 不开库</text>
+
+  <!-- OPENED -->
+  <rect x="390" y="70" width="214" height="86" rx="12" fill="#161b22" stroke="#238636"/>
+  <text class="m" x="497" y="102" font-size="15" fill="#7ee787" text-anchor="middle" font-weight="600">OPENED</text>
+  <text class="t" x="497" y="124" font-size="11.5" fill="#8b949e" text-anchor="middle">DIRTY 已在盘上</text>
+  <text class="t" x="497" y="141" font-size="11.5" fill="#6e7681" text-anchor="middle">应用可以开 · app may run</text>
+
+  <!-- CLOSING -->
+  <rect x="760" y="70" width="214" height="86" rx="12" fill="#161b22" stroke="#1f6feb"/>
+  <text class="m" x="867" y="102" font-size="15" fill="#79c0ff" text-anchor="middle" font-weight="600">CLOSING</text>
+  <text class="t" x="867" y="124" font-size="11.5" fill="#8b949e" text-anchor="middle">checkpoint · 收据 · 快照</text>
+  <text class="t" x="867" y="141" font-size="11.5" fill="#6e7681" text-anchor="middle">失败就不发收据</text>
+
+  <!-- SEALED -->
+  <rect x="760" y="232" width="214" height="86" rx="12" fill="#161b22" stroke="#238636"/>
+  <text class="m" x="867" y="264" font-size="15" fill="#7ee787" text-anchor="middle" font-weight="600">SEALED</text>
+  <text class="t" x="867" y="286" font-size="11.5" fill="#8b949e" text-anchor="middle">可安全关机 · 可换系统</text>
+  <text class="t" x="867" y="303" font-size="11.5" fill="#6e7681" text-anchor="middle">the only state you may boot from</text>
+
+  <!-- RECOVERING -->
+  <rect x="390" y="232" width="214" height="86" rx="12" fill="#161b22" stroke="#d29922"/>
+  <text class="m" x="497" y="264" font-size="15" fill="#e3b341" text-anchor="middle" font-weight="600">RECOVERING</text>
+  <text class="t" x="497" y="286" font-size="11.5" fill="#8b949e" text-anchor="middle">先体检，再决定：保留 / 回滚</text>
+  <text class="t" x="497" y="303" font-size="11.5" fill="#6e7681" text-anchor="middle">never roll back on sight</text>
+
+  <!-- arrows: normal path -->
+  <g stroke="#58a6ff" stroke-width="2" fill="none" marker-end="url(#a1)">
+    <path d="M 268 113 L 384 113"/>
+    <path d="M 608 113 L 754 113"/>
+    <path d="M 608 275 L 754 275"/>
+  </g>
+  <g class="t" font-size="11.5" fill="#6e7681" text-anchor="middle">
+    <text x="326" y="104">all pass 全部通过</text>
+    <text x="326" y="130">写 DIRTY</text>
+    <text x="681" y="104">app exits · 停 daemon</text>
+    <text x="681" y="130">close</text>
+    <text x="681" y="266">体检通过 / 回滚完成</text>
+  </g>
+
+  <!-- CLOSING -> SEALED -->
+  <path d="M 867 160 L 867 226" stroke="#58a6ff" stroke-width="2" fill="none" marker-end="url(#a1)"/>
+  <text class="t" x="878" y="192" font-size="11.5" fill="#6e7681">ok：写收据 → 最后删 DIRTY</text>
+
+  <!-- CHECKING -> RECOVERING (dashed) -->
+  <path d="M 157 160 L 157 275 L 384 275" stroke="#d29922" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#a2)"/>
+  <text class="t" x="166" y="220" font-size="11.5" fill="#8b949e">有 DIRTY / hash 不符 / integrity 失败</text>
+  <text class="t" x="166" y="238" font-size="11.5" fill="#6e7681">→ 不进 OPENED</text>
+
+  <!-- CLOSING -> RECOVERING (dashed) -->
+  <path d="M 820 160 L 820 205 L 497 205 L 497 226" stroke="#d29922" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#a2)"/>
+  <text class="t" x="512" y="199" font-size="11.5" fill="#6e7681">任一步失败：DIRTY 保留，下次开机进恢复</text>
+
+  <!-- SEALED -> CHECKING (next boot) -->
+  <path d="M 867 322 L 867 404 L 157 404 L 157 166" stroke="#8b949e" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#a3)"/>
+  <text class="t" x="512" y="397" font-size="12" fill="#8b949e" text-anchor="middle">关机 → 下次开机（可能是另一侧）· next boot, possibly the other OS</text>
+
+  <text class="t" x="50" y="452" font-size="12.5" fill="#6e7681">实线 = 正常路径　·　虚线 = 异常或回环　·　只有 SEALED 允许换系统</text>
+  <text class="t" x="1050" y="452" font-size="12.5" fill="#6e7681" text-anchor="end">docs/02 · §8</text>
+</svg>

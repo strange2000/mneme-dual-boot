@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-label="mneme-dual-boot — verified handoff for one SQLite database on a dual-boot shared volume">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#101a25"/>
+    </linearGradient>
+    <style>
+      .t{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans CJK SC','Microsoft YaHei',sans-serif}
+      .m{font-family:'SF Mono',ui-monospace,Consolas,monospace}
+    </style>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="319" rx="18" fill="url(#bg)" stroke="#30363d"/>
+
+  <text class="t" x="56" y="100" font-size="46" font-weight="700" fill="#e6edf3">mneme-dual-boot</text>
+
+  <text class="t" x="56" y="142" font-size="18" fill="#8b949e">One laptop · two systems in turn · one database on a shared volume.</text>
+  <text class="t" x="56" y="172" font-size="17" fill="#8b949e">一台笔记本 · 双系统轮流开机 · 共享盘上只有一份库：<tspan fill="#58a6ff">进前验，出前封</tspan>。</text>
+
+  <!-- command chips -->
+  <g class="m" font-size="14">
+    <rect x="56" y="212" width="88" height="36" rx="18" fill="#161b22" stroke="#30363d"/>
+    <text x="100" y="235" fill="#58a6ff" text-anchor="middle">open</text>
+    <rect x="152" y="212" width="92" height="36" rx="18" fill="#161b22" stroke="#30363d"/>
+    <text x="198" y="235" fill="#58a6ff" text-anchor="middle">close</text>
+    <rect x="252" y="212" width="96" height="36" rx="18" fill="#161b22" stroke="#30363d"/>
+    <text x="300" y="235" fill="#58a6ff" text-anchor="middle">status</text>
+    <rect x="356" y="212" width="104" height="36" rx="18" fill="#161b22" stroke="#30363d"/>
+    <text x="408" y="235" fill="#58a6ff" text-anchor="middle">recover</text>
+  </g>
+
+  <text class="t" x="56" y="286" font-size="15" fill="#6e7681">两系统互斥 · only one runs at a time → no concurrency, no merge, just a stamp on every handoff</text>
+
+  <!-- shared volume panel -->
+  <rect x="772" y="52" width="372" height="216" rx="14" fill="#161b22" stroke="#30363d"/>
+  <text class="t" x="796" y="80" font-size="12.5" fill="#6e7681" letter-spacing="0.5">SHARED VOLUME · exFAT</text>
+
+  <g class="m" font-size="14">
+    <rect x="792" y="92" width="332" height="32" rx="8" fill="#0d1117" stroke="#238636"/>
+    <text x="806" y="113" fill="#7ee787">state.db</text>
+    <text x="1110" y="113" fill="#6e7681" text-anchor="end" font-size="12">真源 / source of truth</text>
+
+    <rect x="792" y="130" width="332" height="32" rx="8" fill="#0d1117" stroke="#1f6feb"/>
+    <text x="806" y="151" fill="#79c0ff">handoff.json</text>
+    <text x="1110" y="151" fill="#6e7681" text-anchor="end" font-size="12">收据 / receipt</text>
+
+    <rect x="792" y="168" width="332" height="32" rx="8" fill="#0d1117" stroke="#9e6a03"/>
+    <text x="806" y="189" fill="#e3b341">DIRTY</text>
+    <text x="1110" y="189" fill="#6e7681" text-anchor="end" font-size="12">脏标志 / dirty</text>
+
+    <rect x="792" y="206" width="332" height="32" rx="8" fill="#0d1117" stroke="#30363d"/>
+    <text x="806" y="227" fill="#8b949e">*.db-wal</text>
+    <text x="1110" y="227" fill="#6e7681" text-anchor="end" font-size="12">瞬态 / transient</text>
+  </g>
+</svg>

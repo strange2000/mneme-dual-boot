@@ -1,8 +1,27 @@
 # mneme-dual-boot
 
+<p align="center">
+  <img src="assets/banner.svg" alt="mneme-dual-boot — verified handoff for one SQLite database on a dual-boot shared volume" width="100%">
+</p>
+
+<p align="center">
+  <a href="README.zh-CN.md"><img alt="用中文阅读" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-2f81f7?style=for-the-badge&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="README.md"><img alt="Read in English" src="https://img.shields.io/badge/ENGLISH-30363d?style=for-the-badge&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
+
+<sub>英文版：[README.md](README.md) ← 点上面的按钮，或点这里</sub>
+
+<p align="center">
+  <img alt="许可证 MIT" src="https://img.shields.io/badge/license-MIT-3fb950?style=flat-square">
+  <img alt="需要 node 22 以上" src="https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white">
+  <img alt="零依赖" src="https://img.shields.io/badge/dependencies-0-2f81f7?style=flat-square">
+  <img alt="平台 Windows 与 macOS" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-8b949e?style=flat-square">
+  <img alt="协议 v0" src="https://img.shields.io/badge/protocol-v0-d29922?style=flat-square">
+</p>
+
 **一台笔记本、两个操作系统（macOS + Windows 双系统）、只有一份数据文件，轮流开机。**
 
-[English](README.md) ｜ 中文（本文是中文原文；五篇文档各有一份 `.en.md` 英文版）
+📄 **全量双语**：五篇文档每篇都有两份 —— `docs/NN-*.md`（中文）与 `docs/NN-*.en.md`（英文），每份顶部都有同一个切换按钮。英文主页：[README.md](README.md)。
 
 这个仓库记录的，是让这种布局**不丢数据**所需要知道的全部事情 —— 以及我在这台机器上实测出来的数字。
 
@@ -18,7 +37,7 @@
 
 ---
 
-## 为什么值得写成文档
+## 💥 为什么值得写成文档
 
 把数据库放到共享盘上这件事，说穿了就是两行：
 
@@ -38,7 +57,7 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 
 ---
 
-## 实测数据（Windows 侧，node 24 + SQLite 3.53.4）
+## 📊 实测数据（Windows 侧，node 24 + SQLite 3.53.4）
 
 复现方式见 [`lab/`](lab/)。全部是在真实的双系统共享 exFAT 卷上跑的，不是模拟。
 
@@ -59,7 +78,7 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 | ⚠️ WAL 文件是否落盘 | **子进程 WAL 模式提交 500 次后，磁盘上没有 `-wal`，数据已在主文件里**（复现 3 次） | 见结论 5：不要用 WAL 文件的存在性做任何判断 |
 | 真实库体检 | 数百 MB（另有数 MB WAL）、page 4096、freelist 4.5%、22 张表、`integrity_check` = ok / 1141 ms | 这个规模的库，体检成本 1 秒级 |
 
-### 五个结论
+### 🧠 五个结论
 
 1. **锁是好的，时间戳是坏的。** SQLite 的跨进程锁在 exFAT 上工作正常，`rename`、`open(wx)` 也都能用 —— 协议需要的原语**都在**。唯一坏掉的是"文件多久没变"这个朴素判断，粒度 2 秒且跨系统不可比。**用内容哈希，永远别用 mtime。**
 2. **权限这条没了。** `chmod 600` 是静默无效的。共享盘上的数据库是"这台机器上任何能登录的账户都能读"的。要么接受，要么把卷做成加密卷，别指望 `chmod`。
@@ -71,7 +90,7 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 
 ---
 
-## 协议一句话
+## 🧭 协议一句话
 
 > **进之前先验，出之前先封；凡是没封的，一律不信。**
 
@@ -83,9 +102,13 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 
 代次（`gen`）是**你自己递增的整数**，不是时间戳 —— 因为时间戳在这个文件系统上不可信。
 
+<p align="center">
+  <img src="assets/handoff-flow.svg" alt="The daily loop: boot, open, use, close, shut down — alternating between macOS and Windows, always the same database on the shared volume" width="100%">
+</p>
+
 ---
 
-## 参考实现：`handoff.mjs`
+## 🧰 参考实现：`handoff.mjs`
 
 零依赖，单个文件，Node ≥ 22（只用 `node:sqlite` / `node:crypto` / `node:fs`）。把它拷到任何地方就能跑，不需要 npm install。
 
@@ -125,7 +148,7 @@ node lab/handoff-selftest.mjs E:/_hstest     # 18 个断言，几秒钟
 
 ---
 
-## 这个项目从哪来：mneme
+## ✨ 这个项目从哪来：mneme
 
 这套东西不是凭空设计的，是为了解决一个具体问题：**我的 AI 记忆库（[`@modusensus/dsh-mneme`](https://github.com/slow-stack/mneme)，MIT）要在一台双系统笔记本的两个系统里读同一份 `memory.db`。**
 
@@ -149,7 +172,7 @@ mneme 自己保证了**进程内**的单写者（记忆巩固只装配在宿主�
 
 ---
 
-## 适用范围
+## ✅ 适用范围
 
 **适合**
 
@@ -167,7 +190,7 @@ mneme 自己保证了**进程内**的单写者（记忆巩固只装配在宿主�
 
 ---
 
-## 这个仓库里没什么
+## 🙈 这个仓库里没什么
 
 诚实说明我验证不了的部分，见 [`docs/01-failure-modes.md`](docs/01-failure-modes.md) 末尾的「未验证清单」。简短版：
 
@@ -179,7 +202,7 @@ mneme 自己保证了**进程内**的单写者（记忆巩固只装配在宿主�
 
 ---
 
-## 目录
+## 🗂️ 目录
 
 | 文件 | 内容 |
 |---|---|
@@ -193,7 +216,7 @@ mneme 自己保证了**进程内**的单写者（记忆巩固只装配在宿主�
 
 ---
 
-## 许可
+## 📜 许可
 
 MIT。这些数字和这份协议，本来就是踩坑换来的，希望别人少踩一次。
 如果你在自己的机器上测出不一样的数（尤其是 macOS 侧），请开 issue —— 那正是这份文档最缺的东西。

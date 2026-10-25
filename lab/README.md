@@ -1,6 +1,9 @@
-# lab/ · 可复现的探针
+# 🧪 lab/ · 可复现的探针
 
-[English](README.en.md) ｜ 中文（本文）
+<p>
+  <a href="README.en.md"><img alt="Read in English" src="https://img.shields.io/badge/English-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="README.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 这三个脚本产出 README 表格里的每一个数字，并验证 `handoff.mjs` 的行为。**请在自己的卷上跑一遍** —— 我的数字只属于我这块盘。
 

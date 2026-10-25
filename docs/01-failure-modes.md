@@ -1,6 +1,9 @@
-# 01 · 失败模式清单
+# 🔥 01 · 失败模式清单
 
-[English](01-failure-modes.en.md) ｜ 中文（本文）
+<p>
+  <a href="01-failure-modes.en.md"><img alt="Read in English" src="https://img.shields.io/badge/English-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="01-failure-modes.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 按"哪一层坏掉"分类。**每一条后面标了 [实测] 还是 [推理]** —— 我不想把推测写成结论。
 

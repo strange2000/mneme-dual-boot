@@ -1,10 +1,13 @@
-# 02 · The handoff protocol, spec v0
+# 🧭 02 · The handoff protocol, spec v0
 
 > **In one sentence**: verify before you enter, seal before you leave; anything unsealed is not to be trusted.
 > **Applies to**: one machine, two operating systems taking turns (mutually exclusive), the data being a single file on a shared volume.
 > **Does not apply to**: both sides running at once — that is concurrent writing and needs real conflict resolution, which this protocol does not do.
 
-[中文](02-handoff-protocol.md) ｜ English (this file)
+<p>
+  <a href="02-handoff-protocol.en.md"><img alt="English" src="https://img.shields.io/badge/English-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="02-handoff-protocol.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 ---
 
@@ -219,6 +222,10 @@ Neither side may modify the original database during migration. The classic way 
 ---
 
 ## 8. State machine
+
+<p align="center">
+  <img src="../assets/state-machine.svg" alt="Handoff state machine: CHECKING, OPENED, CLOSING, SEALED, with RECOVERING on the error path" width="100%">
+</p>
 
 ```
                  ┌────────────┐

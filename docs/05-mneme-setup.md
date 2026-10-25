@@ -1,6 +1,9 @@
-# 05 · 在 mneme 上落地
+# ✨ 05 · 在 mneme 上落地
 
-[English](05-mneme-setup.en.md) ｜ 中文（本文）
+<p>
+  <a href="05-mneme-setup.en.md"><img alt="Read in English" src="https://img.shields.io/badge/English-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="05-mneme-setup.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 这份文档把前面四份的通用协议接到一个具体的东西上：**`@modusensus/dsh-mneme`（DSH 的记忆插件，MIT，[slow-stack/mneme](https://github.com/slow-stack/mneme)）**。
 

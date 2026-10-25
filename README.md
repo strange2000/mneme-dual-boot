@@ -1,5 +1,24 @@
 # mneme-dual-boot
 
+<p align="center">
+  <img src="assets/banner.svg" alt="mneme-dual-boot — verified handoff for one SQLite database on a dual-boot shared volume" width="100%">
+</p>
+
+<p align="center">
+  <a href="README.md"><img alt="Read in English" src="https://img.shields.io/badge/ENGLISH-2f81f7?style=for-the-badge&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="README.zh-CN.md"><img alt="用中文阅读" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-30363d?style=for-the-badge&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
+
+<sub>中文版 (Chinese): [README.zh-CN.md](README.zh-CN.md) — use the button above, or this link.</sub>
+
+<p align="center">
+  <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-3fb950?style=flat-square">
+  <img alt="node 22 or newer" src="https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white">
+  <img alt="zero dependencies" src="https://img.shields.io/badge/dependencies-0-2f81f7?style=flat-square">
+  <img alt="platforms Windows and macOS" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-8b949e?style=flat-square">
+  <img alt="protocol v0" src="https://img.shields.io/badge/protocol-v0-d29922?style=flat-square">
+</p>
+
 **One laptop. Two operating systems (hackintosh macOS + Windows). One memory database. One at a time.**
 
 This is how I run [`@modusensus/dsh-mneme`](https://github.com/slow-stack/mneme)'s `memoryDir` on a volume that both systems mount — written up so the next person doesn't have to rediscover it the hard way. The protocol underneath is generic (any single SQLite state file, any dual-boot machine); the case that produced it is mine.
@@ -9,11 +28,11 @@ This is how I run [`@modusensus/dsh-mneme`](https://github.com/slow-stack/mneme)
 > The real enemy is not "the two sides disagree", it is **"the next side trusts whatever the previous side left behind"**.
 > An SQLite database on a journal-less volume looks perfectly fine after a crash, a hard shutdown, or an unclean unmount — right up until you write enough data to discover it was already broken. That is the single problem this repo is about.
 
-`README.zh-CN.md` — [中文版](README.zh-CN.md). Docs: each one exists in `docs/NN-*.md` (中文) and `docs/NN-*.en.md` (English).
+📄 **Fully bilingual.** Every document exists twice — `docs/NN-*.md` (中文) and `docs/NN-*.en.md` (English) — and every file carries the same switcher at the top. This README: [中文版](README.zh-CN.md).
 
 ---
 
-## Why this needed writing down
+## 💥 Why this needed writing down
 
 Putting a database on a shared volume is, on the surface, two lines:
 
@@ -33,7 +52,7 @@ Everything below is the verifiable envelope around those two lines.
 
 ---
 
-## Measured (Windows side, Node 24 + SQLite 3.53.4)
+## 📊 Measured (Windows side, Node 24 + SQLite 3.53.4)
 
 Reproduce with [`lab/`](lab/README.en.md). All of it on a real dual-boot shared exFAT volume, not a simulation.
 
@@ -54,7 +73,7 @@ Reproduce with [`lab/`](lab/README.en.md). All of it on a real dual-boot shared 
 | ⚠️ Does the `-wal` file reach the disk? | **a child process committed 500 times in WAL mode and no `-wal` file existed on disk** (3 reproductions) | see conclusion 5: never use WAL presence/size as evidence |
 | A real database, checked | a few hundred MB (plus a multi-MB WAL), page 4096, freelist 4.5%, 22 tables, `integrity_check` = ok in 1141 ms | for this size, a physical runs in about a second |
 
-### Five conclusions
+### 🧠 Five conclusions
 
 1. **The locks are fine; the timestamps are not.** SQLite's cross-process locking works on exFAT, and so do `rename` and `open(wx)` — every primitive the protocol needs is there. The one thing that is broken is the naive "how long has this file been idle" test: 2-second granularity, incomparable across systems. **Hash the content; never trust mtime.**
 2. **Permissions are simply gone.** `chmod 600` fails silently. A database on this volume is readable by any account that can log in. Accept it, or make the volume encrypted — but don't pretend `chmod` protects you.
@@ -66,7 +85,7 @@ Reproduce with [`lab/`](lab/README.en.md). All of it on a real dual-boot shared 
 
 ---
 
-## The protocol in one sentence
+## 🧭 The protocol in one sentence
 
 > **Verify before you enter; seal before you leave; anything unsealed is not to be trusted.**
 
@@ -78,9 +97,13 @@ The full spec (file formats, state machine, atomicity requirements, rotation and
 
 The generation (`gen`) is **an integer you increment yourself**, not a timestamp — because timestamps are not trustworthy on this filesystem.
 
+<p align="center">
+  <img src="assets/handoff-flow.svg" alt="The daily loop: boot, open, use, close, shut down — alternating between macOS and Windows, always the same database on the shared volume" width="100%">
+</p>
+
 ---
 
-## Reference implementation: `handoff.mjs`
+## 🧰 Reference implementation: `handoff.mjs`
 
 Zero dependencies, one file, Node ≥ 22 (uses `node:sqlite`, `node:crypto`, `node:fs`). Copy it anywhere and run it; there is nothing to install.
 
@@ -120,7 +143,7 @@ It creates a database **on your volume**, then pushes it through nine situations
 
 ---
 
-## Where this came from: mneme
+## ✨ Where this came from: mneme
 
 None of this was designed in the abstract. It solves one specific problem: **my AI memory database ([`@modusensus/dsh-mneme`](https://github.com/slow-stack/mneme), MIT) has to be the same `memory.db` in both systems of one dual-boot laptop.**
 
@@ -144,16 +167,16 @@ mneme guarantees a single writer **within one process** (memory consolidation is
 
 ---
 
-## Scope
+## ✅ Scope
 
-**Fits**
+**✅ Fits**
 
 - one machine, two systems taking turns (mutually exclusive)
 - the state lives in **a single file** (SQLite, KeePass, some note apps, a git repo)
 - the shared volume is exFAT / FAT32 / NTFS (read-only on macOS) — anything without POSIX semantics
 - you are willing to pay 1–2 seconds per boot and per shutdown
 
-**Does not fit**
+**❌ Does not fit**
 
 - ❌ **two machines that can be on at the same time** — that is real concurrent writing and needs real conflict resolution
 - ❌ several applications writing the same database
@@ -162,7 +185,7 @@ mneme guarantees a single writer **within one process** (memory consolidation is
 
 ---
 
-## What is not here
+## 🙈 What is not here
 
 The honest limits are listed in [`docs/01-failure-modes.en.md`](docs/01-failure-modes.en.md) (see the unverified list at the end). Short version:
 
@@ -174,7 +197,7 @@ The honest limits are listed in [`docs/01-failure-modes.en.md`](docs/01-failure-
 
 ---
 
-## Layout
+## 🗂️ Layout
 
 | File | Contents |
 |---|---|
@@ -188,7 +211,7 @@ The honest limits are listed in [`docs/01-failure-modes.en.md`](docs/01-failure-
 
 ---
 
-## License
+## 📜 License
 
 MIT. These numbers and this protocol were paid for in mistakes; hopefully someone else skips one.
 

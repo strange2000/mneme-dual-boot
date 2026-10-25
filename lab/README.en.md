@@ -1,4 +1,4 @@
-# lab/ · Reproducible probes
+# 🧪 lab/ · Reproducible probes
 
 These three scripts produce every number in the README table and verify the behaviour of `handoff.mjs`. **Run them on your own volume** — my numbers only describe my disk.
 
@@ -16,7 +16,10 @@ Requirement: **Node ≥ 22** (built-in `node:sqlite`, zero dependencies — whic
 
 All three stay inside directories they create and clean up on exit (`--keep` keeps them). `exfat-probe.mjs` also writes its result to `./exfat-probe-result.json` (the copy in this directory is the raw output of my run), so you can paste it straight into an issue.
 
-[中文](README.md) ｜ English (this file)
+<p>
+  <a href="README.en.md"><img alt="English" src="https://img.shields.io/badge/English-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="README.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 ---
 

@@ -1,4 +1,4 @@
-# 05 · Wiring it up on mneme
+# ✨ 05 · Wiring it up on mneme
 
 This document attaches the generic protocol of the previous four to one concrete thing: **`@modusensus/dsh-mneme`** (the memory plugin for DSH, MIT, [slow-stack/mneme](https://github.com/slow-stack/mneme)).
 
@@ -6,7 +6,10 @@ This repository grew out of that plugin: one machine, two systems taking turns, 
 
 > If you only want the generic approach (valid for any "single SQLite state file"), read [02-handoff-protocol.en.md](02-handoff-protocol.en.md); you don't need this one.
 
-[中文](05-mneme-setup.md) ｜ English (this file)
+<p>
+  <a href="05-mneme-setup.en.md"><img alt="English" src="https://img.shields.io/badge/English-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="05-mneme-setup.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 ---
 

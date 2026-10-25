@@ -1,9 +1,12 @@
-# 03 · What to do on the bad day
+# 🚑 03 · What to do on the bad day
 
 > Precondition: you already keep the database on a shared volume, and now it looks suspicious.
 > **First principle: before you touch anything, copy the whole scene as it is.** Every step below is reversible, but the act of "repairing" destroys evidence.
 
-[中文](03-recovery-runbook.md) ｜ English (this file)
+<p>
+  <a href="03-recovery-runbook.en.md"><img alt="English" src="https://img.shields.io/badge/English-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="03-recovery-runbook.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 ---
 

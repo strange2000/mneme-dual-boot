@@ -1,6 +1,9 @@
-# 04 · 为什么**不做**同步
+# 🚫 04 · 为什么**不做**同步
 
-[English](04-why-not-sync.en.md) ｜ 中文（本文）
+<p>
+  <a href="04-why-not-sync.en.md"><img alt="Read in English" src="https://img.shields.io/badge/English-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="04-why-not-sync.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 这份文档记录被否决的方案和理由。写下来是因为：几乎每个看到"双系统 + 一份数据"的人，第一反应都是"上个同步工具不就完了"。
 

@@ -1,6 +1,9 @@
-# 03 · 出事那天照着做
+# 🚑 03 · 出事那天照着做
 
-[English](03-recovery-runbook.en.md) ｜ 中文（本文）
+<p>
+  <a href="03-recovery-runbook.en.md"><img alt="Read in English" src="https://img.shields.io/badge/English-30363d?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+  <a href="03-recovery-runbook.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
+</p>
 
 > 前提：你已经把库放在共享盘上，现在它可疑了。
 > **第一原则：在动任何东西之前，先把现场原样复制一份。** 后面所有步骤都可逆，但"修"这个动作本身会毁掉证据。
