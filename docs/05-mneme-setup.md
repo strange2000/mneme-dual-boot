@@ -1,5 +1,7 @@
 # 05 · 在 mneme 上落地
 
+[English](05-mneme-setup.en.md) ｜ 中文（本文）
+
 这份文档把前面四份的通用协议接到一个具体的东西上：**`@modusensus/dsh-mneme`（DSH 的记忆插件，MIT，[slow-stack/mneme](https://github.com/slow-stack/mneme)）**。
 
 这个仓库就是在这个插件上长出来的：一台机器两个系统轮流开机，两边读同一份 `memory.db`。所以下面这些是实测过的，不是猜的。

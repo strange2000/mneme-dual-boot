@@ -1,11 +1,16 @@
 {
-  "name": "exfat-handoff",
+  "name": "mneme-dual-boot",
   "version": "0.1.0",
   "description": "Verified handoff for a single SQLite database kept on a shared volume that two operating systems take turns mounting. Field notes, protocol spec, recovery runbook, and a zero-dependency reference implementation.",
   "license": "MIT",
   "author": "strange2000",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strange2000/mneme-dual-boot.git"
+  },
+  "homepage": "https://github.com/strange2000/mneme-dual-boot#readme",
   "bin": {
-    "exfat-handoff": "./handoff.mjs"
+    "mneme-dual-boot": "./handoff.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -23,6 +28,7 @@
     "docs/",
     "lab/",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE"
   ],
   "scripts": {
