@@ -1,0 +1,33 @@
+{
+  "name": "exfat-handoff",
+  "version": "0.1.0",
+  "description": "Verified handoff for a single SQLite database kept on a shared volume that two operating systems take turns mounting. Field notes, protocol spec, recovery runbook, and a zero-dependency reference implementation.",
+  "license": "MIT",
+  "author": "strange2000",
+  "bin": {
+    "exfat-handoff": "./handoff.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "exfat",
+    "sqlite",
+    "dual-boot",
+    "handoff",
+    "integrity-check",
+    "crash-recovery"
+  ],
+  "files": [
+    "handoff.mjs",
+    "docs/",
+    "lab/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "selftest": "node lab/handoff-selftest.mjs",
+    "probe": "node lab/exfat-probe.mjs",
+    "crash-probe": "node lab/crash-probe.mjs"
+  }
+}

@@ -3,13 +3,15 @@
 **一台笔记本、两个操作系统（macOS + Windows 双系统）、只有一份数据文件，轮流开机。**
 这个仓库记录的，是让这种布局**不丢数据**所需要知道的全部事情 —— 以及我在这台机器上实测出来的数字。
 
+这是一个**方法论仓库**，不是一个同步工具：一份能照着实现的协议规范、一份出事那天照着做的恢复手册、一个零依赖的参考实现（`handoff.mjs`），外加一套可复现的实测脚本。它起源于我自己的 [mneme](#这个项目从哪来mneme) 记忆库，但协议本身跟 mneme 无关 —— 任何"单个 SQLite 状态文件放在双系统共享盘上"的场景都适用。
+
 > ⚠️ **这不是同步工具。**
 > 双系统永远不会同时开机，所以**不需要任何同步算法**：谁开机，谁独占那一个文件。
 > 真正的敌人不是"两端数据不一致"，而是**"下一端无条件相信上一端留下的文件是好的"**。
 > 一份放在共享盘上的 SQLite 数据库，在崩溃、强关机、卷未干净卸载之后，看起来完全正常，
 > 直到你写进去一大批数据才发现它是坏的。这个仓库就是围绕这一件事写的。
 
-<sub>English TL;DR — Field notes + a handoff protocol for keeping **one** SQLite database on an exFAT (or any journal-less) volume that two operating systems take turns mounting. Dual boot means mutual exclusion, so no sync algorithm is needed; what is needed is a *verified handoff*: checkpoint → integrity check → content hash → receipt, plus a dirty marker so the next boot knows whether it can trust the file. Measured facts, failure modes, protocol spec, recovery runbook. Docs are in Chinese; numbers are reproducible with `lab/`.</sub>
+<sub>English TL;DR — Field notes + a handoff protocol for keeping **one** SQLite database on an exFAT (or any journal-less) volume that two operating systems take turns mounting. Dual boot means mutual exclusion, so no sync algorithm is needed; what is needed is a *verified handoff*: checkpoint → integrity check → content hash → receipt, plus a dirty marker so the next boot knows whether it can trust the file. Measured facts, failure modes, protocol spec, recovery runbook, and a zero-dependency reference implementation (`handoff.mjs`, verified on real hardware). Docs are in Chinese; numbers are reproducible with `lab/`.</sub>
 
 ---
 
@@ -80,6 +82,70 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 
 ---
 
+## 参考实现：`handoff.mjs`
+
+零依赖，单个文件，Node ≥ 22（只用 `node:sqlite` / `node:crypto` / `node:fs`）。把它拷到任何地方就能跑，不需要 npm install。
+
+```bash
+node handoff.mjs open    <共享目录> --owner windows   # 开机后、开程序前
+node handoff.mjs close   <共享目录> --owner windows   # 关程序后、关机前
+node handoff.mjs status  <共享目录>                   # 只读：这个库现在能不能信
+node handoff.mjs recover <共享目录>                   # 上次没收尾：体检 + 必要时回滚
+```
+
+元数据都在 `<共享目录>/.handoff/` 里，和你的数据放一起 —— 这样它跟着卷走，不会出现"收据在 A 盘、数据在 B 盘"的分裂。
+
+| 退出码 | 含义 | 该做什么 |
+|---|---|---|
+| 0 | ok | 继续 |
+| 10 | 存在 `DIRTY`，上次没干净收尾 | 跑 `recover` |
+| 11 | 库的 sha256 与收据不符 | 跑 `recover`（可能是崩溃、也可能有人手改了库） |
+| 12 | `integrity_check` 失败 | 跑 `recover`；坏库已改名进 `abandoned/`，**没删** |
+| 13 | 没有收据（首次使用） | 按 `docs/02` §8 做首次迁移 |
+| 14 | 协议版本不认识 | 别用新版本的脚本碰旧目录 |
+| 20 | 拿不到写锁，还有进程开着这个库 | 停掉程序（含托盘/menubar 进程）再试 |
+| 21 | `wal_checkpoint` 之后 `-wal` 没归零 | 别关机，先查是谁还在写 |
+| 22 | 没有可用快照 | 看 `docs/03` §5 |
+| 30 | 用法错误 | 看 `--help` |
+
+**`close` 不会"尽力而为"。** 任何一步不过，它就不写收据、不删 `DIRTY`，宁可让你多跑一遍。这是故意的：一个"看起来干净"的库比一个"明确报错"的库危险得多。
+
+实现在真实 exFAT 卷上跑过 13 个端到端场景（正常交接、二次打开、脏标志、健康库恢复、坏页检测、回滚、快照轮转、手改镜像、手改库、另一进程持锁），全部符合预期。坏库永远是**改名保留**，不是删除；快照是**写完再读回来算哈希**，不是写完就算数。
+
+想自己看一遍？把仓库拉到共享盘上，一条命令：
+
+```bash
+node lab/handoff-selftest.mjs E:/_hstest     # 18 个断言，几秒钟
+```
+
+它会在你**那块卷**上造一个库，然后把它推过九种情形（含页级损坏与回滚），逐条核对退出码。看 `lab/README.md` 里的期望值表。
+
+---
+
+## 这个项目从哪来：mneme
+
+这套东西不是凭空设计的，是为了解决一个具体问题：**我的 AI 记忆库（[`@modusensus/dsh-mneme`](https://github.com/slow-stack/mneme)，MIT）要在一台双系统笔记本的两个系统里读同一份 `memory.db`。**
+
+所以最有说服力的证据是：它现在真的在跑。
+
+```yaml
+# 两端的 profile 配置里，指同一个物理目录
+memoryDir: E:/mneme                      # Windows
+memoryDir: /Volumes/Shared/mneme          # macOS，同一个目录
+```
+
+```bash
+node handoff.mjs open  E:/mneme --owner windows   # 开机后
+#   ... 用 DSH，记忆随便写 ...
+node handoff.mjs close E:/mneme --owner windows   # 关 DSH + 停 daemon 后
+```
+
+mneme 自己保证了**进程内**的单写者（记忆巩固只装配在宿主进程里），管不到"上一次开机是另一个操作系统" —— 那个空洞正好是本协议补的那块。具体的接法、daemon（`dsh-mneme-serve`，默认 `127.0.0.1:8790`）为什么必须在 `close` 之前停掉、以及交接单元为什么是**整个目录**而不只是 `memory.db`，都在 [`docs/05-mneme-setup.md`](docs/05-mneme-setup.md)。
+
+> 不用 mneme？那就只需要 `docs/01`–`04`。协议不认识 mneme，`handoff.mjs` 也不认识。
+
+---
+
 ## 适用范围
 
 **适合**
@@ -104,6 +170,9 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 
 - **macOS 侧全部未实测**（我只在 Windows 侧跑过）：exFAT 驱动的卸载行为、`.Spotlight-V100` / `.fseventsd` 的干扰、`lsof` 判活、真断电后的表现。
 - **断电 / 拔盘未做破坏性实验**（不做，是因为它会真的毁掉我自己的库）。所以本文所有"崩溃"结论都来自 `SIGKILL` 强杀进程，不是断电 —— 两者的差别在于**文件系统自身的一致性**，而 exFAT 恰恰在这里没有日志。这一点是本文最大的已知盲区，请按"最坏情况比本文更糟"来读。
+- **没有开机自动化。** 没写 systemd / launchd / 计划任务，也没法替你保证"`open` 一定先于程序启动"。两个系统各要一套，写错了比不写更糟，所以留给你。
+- **没有卷身份校验。** 协议里（I7）要求认卷序列号而不是盘符，参考实现还没做 —— 把整个目录拷到另一块盘上它发现不了。
+- **没有 GUI、没有守护进程、没有安装包。** 它是四个命令，就这样。
 
 ---
 
@@ -111,10 +180,12 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 
 | 文件 | 内容 |
 |---|---|
+| [`handoff.mjs`](handoff.mjs) | **参考实现**：`open` / `close` / `status` / `recover`，零依赖 |
 | [`docs/01-failure-modes.md`](docs/01-failure-modes.md) | 失败模式清单：文件系统层 / SQLite 层 / 时序层 / 人为层 |
 | [`docs/02-handoff-protocol.md`](docs/02-handoff-protocol.md) | **交接协议规范 v0**：收据、脏标志、状态机、回滚 |
 | [`docs/03-recovery-runbook.md`](docs/03-recovery-runbook.md) | 出事那天照着做的手册（含"什么情况下不要救、直接回滚"） |
 | [`docs/04-why-not-sync.md`](docs/04-why-not-sync.md) | 为什么**不做**同步：被否决的几种方案与理由 |
+| [`docs/05-mneme-setup.md`](docs/05-mneme-setup.md) | 接到 mneme 上的具体做法（含 daemon 与目录级交接） |
 | [`lab/`](lab/) | 可复现的探针脚本：上面那张表的每一行都能跑出来 |
 
 ---
