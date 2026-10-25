@@ -22,29 +22,45 @@ On the next mount, macOS runs `fsck_exfat`, and it **"repairs" by itself** — u
 
 This is fundamentally different from NTFS/APFS with a journal: there, the worst case after a crash is rolling back to the last transaction; here, the worst case is the file structure itself being broken.
 
-### A2 Permissions are fake [measured]
-`chmod 0600` results in `mode = 666`. Anything on that volume can be read and written by any account that can log in to the machine.
+### A2 Permissions are fake [measured: Windows + macOS]
+On Windows: `chmod 0600` results in `mode = 666`.
+On macOS: mode is **frozen at `0o700`** — `chmod 600` / `777` / `000` change nothing and raise no error, and the file is still readable after `chmod 000`. **chmod is a complete no-op**, because the mount carries `noowners`. Anything on that volume can be read and written by any account that can log in to the machine.
 
 **There is no way to put permissions on a single file on exFAT.** Either make the whole volume encrypted (VeraCrypt / BitLocker To Go — check macOS can still read it), or accept it.
 
-### A3 Timestamp granularity is 2 seconds, and incomparable across systems [measured + inferred]
-Measured: 20 writes within 5 seconds produced **4** distinct mtimes; the smallest step was **2.000 s**.
+> ⚠️ **On macOS this trap disguises itself as "permissions work".** The probe's `permissions_enforced` test asks whether `mode & 0o077 === 0`, and macOS reports 0700 unconditionally, so it answered `true` on macOS. To decide whether permissions are enforced, test whether mode *changes* after chmod and whether the file is still readable after `chmod 000` — never judge by the absolute mode value.
+
+### A3 Timestamp granularity: 2 seconds on Windows, 10 milliseconds on macOS [measured]
+One volume, one exFAT specification, and the two drivers differ by **200×**:
+
+| Side | Granularity | How it was measured |
+|---|---|---|
+| Windows | **2.000 s** | 20 writes within 5 s produced 4 distinct mtimes |
+| macOS | **10 ms** | 200 consecutive rewrites produced 78 distinct mtimes, positive steps always exactly 10.000 ms (min = median = max) |
+| APFS (same machine) | sub-millisecond | 200 rewrites, 200 distinct values |
+
+10 ms is precisely the unit exFAT reserves for mtime, so **macOS follows the specification and the 2 seconds are a Windows driver artifact** — do not read it as "that is just how exFAT is".
 
 [inferred, not cross-checked on this machine] Worse is the semantics: FAT/exFAT timestamps are **local time** fields, Windows writes them in local time, macOS mostly interprets them as UTC. Across dual boot the same file can show an mtime hours apart, and a DST change shifts the difference.
 
-**Conclusion: mtime is unusable for both jobs** — it can neither order files nor tell you whether one changed.
+**Conclusion: mtime is unusable for both jobs** — it can neither order files nor tell you whether one changed. With a 200× spread between the two sides, "unchanged here" may simply mean "just written there".
 
 ### A4 Case-insensitive [measured]
 `CaseProbe.TXT` and `caseprobe.txt` are **the same file**. Writing the lower-case name overwrites the upper-case one and both names remain.
 
 Any logic that keeps case-varied copies, dedupes by normalised path, or validates path spelling is wrong on this volume.
 
-### A5 No symlinks, no hard links [measured]
-`fs.symlinkSync` and `fs.linkSync` both fail: `EISDIR`, `errno = -4068`.
+### A5 Symlinks: no on Windows, yes on macOS; hard links: no on both [measured: Windows + macOS]
+Windows: `fs.symlinkSync` / `fs.linkSync` both fail, `EISDIR`, `errno = -4068`.
+macOS: **symlinks work** — absolute and relative both create, `readlink` round-trips, the link follows and reads the right content, `lstat` reports `Symbolic Link`, and there is **no `._*` companion file** (the driver represents it directly). **Hard links fail**, `ENOTSUP`, `errno = -45`.
 
-So **there is no `current → gen0007.db` pointer layout inside the volume.** Either atomically replace by `rename`, or copy. That is why every "publish" step in the protocol is built on `rename`.
+So "the volume cannot host a `current → gen0007.db` pointer layout" is **true only on Windows**. macOS can, but then the two sides' layouts diverge: Windows cannot create one.
 
-> Keep the distinction clear: **a symlink from NTFS pointing into exFAT works fine** (that is what the usual `mklink` setup does). What is unsupported is creating a link *inside* an exFAT volume.
+> Distinguish this from links that *point into* exFAT: those work on both sides (on Windows it is `mklink`). This machine's `~/.dsh/memory` is exactly such a link, pointing at the library directory on the shared volume.
+>
+> ⚠️ **UNVERIFIED**: whether Windows can read a symlink that macOS created inside the exFAT volume. exFAT has no representation for symlinks; the macOS driver extends it. A Windows driver most likely sees an ordinary file, or errors out. **Do not build the protocol's layout on it.**
+
+Publishing therefore still has to be built on `rename`.
 
 ### A6 Allocation unit is 128 KiB [measured]
 A 1-byte file occupies 131,072 bytes. That is the default large cluster on a few-hundred-GB volume.
@@ -96,20 +112,26 @@ So a physical only proves "the structure is intact", never "nothing was lost". P
 - or a full `integrity_check` plus sampled reads on a schedule;
 - and **keeping the previous snapshot**, so that "a batch went missing" is at least comparable by hand.
 
-### B5 An anomaly (unexplained, recorded as-is) [measured]
-A child process committed 50 times in WAL mode, never closed, then got `SIGKILL`ed:
+### B5 ~~An anomaly (unexplained)~~ Explained: it is V8's GC, not the volume [measured]
+> Correction: an earlier version of this section recorded "50 commits / 8192-byte main file". `lab/crash-probe.mjs` actually performs **500** commits and leaves a **16,384-byte** main file. The numbers are corrected here; the observation was real, only its cause was wrong.
 
-```json
-{ "db": 8192, "-wal": null, "-shm": null }
-```
+Original record: a child process committed 500 times in WAL mode, never closed, then got `SIGKILL`ed — and there was **no `-wal` on disk**, yet another process read 500 rows, `integrity_check` = ok, `journal_mode` still `wal`. The suspects were `node:sqlite` connection flags and this volume's write cache.
 
-There is **no `-wal` on disk**, yet another process opening the database reads **50 rows**, `integrity_check` = ok, `journal_mode` still reports `wal`.
+**Actual cause: `node:sqlite` closes its connection when the `DatabaseSync` object is garbage-collected.** That child wrote its signal file and then spun in a busy loop, never referencing the handle again; it became unreachable, was collected, and the connection closed. For SQLite, the last connection closing is **a clean close**: checkpoint the WAL into the main file, then delete `-wal`/`-shm`. The parent sampled exactly that post-close state, so it looked like the volume was swallowing WAL frames.
 
-Run from the parent process, the same operations do leave a `-wal` (12,392 bytes). Reproduced twice.
+[`lab/b5-gc.mjs`](../lab/b5-gc.mjs) is a one-command A/B/C (`node lab/b5-gc.mjs <dir>`):
 
-No explanation (suspected to be `node:sqlite`'s VFS / connection flags, or this volume's write-cache behaviour).
+| Variant | exFAT | APFS |
+|---|---|---|
+| A: `h` never referenced again (original) | `-wal` gone **3/3** | gone **2/2** |
+| B: one extra line, `globalThis.__keep = h` | gone **0/3** | gone **0/2** |
+| C: explicit `h.close()` | gone 3/3, end state identical to A | same |
 
-**The conclusion does not depend on the explanation, and it strengthens the design: never use "is there a `-wal`" or "how big is `-wal`" as evidence of anything.** Trust only hashes you computed, integrity checks you ran, and receipts you wrote.
+The only variable is whether the JS handle is still referenced. Filesystem, `journal_mode`, `synchronous` and explicit transactions were each ruled out separately (in every such combination `-wal` stayed at 2,080,632 B and the main file at 4,096 B); APFS behaves identically, so both "volume write cache" and "connection flags" are dead.
+
+Two consequences: **no data was lost** (GC triggers a clean close; all 500 rows are in the main file — the danger is the inference, not the data); and **a live process does not mean a live database** (a process can close its database without exiting: `ps` still shows `R`, while at that instant `lsof` shows not a single `state.db`).
+
+**The conclusion is harder than before: never treat "is there a `-wal`", "`-wal` size" or "main file size" as evidence of anything, and never infer "the database is still open" from "the process is still running".** Test liveness with `lsof +D <dir>` (verified on macOS/exFAT: it names the holder of `state.db` / `state.db-wal`), not with `kill -0`. Trust only hashes you computed, integrity checks you ran, and receipts you wrote.
 
 ---
 
@@ -146,19 +168,21 @@ Across dual boot the shared volume's drive letter / mount point differs, and may
 | D3 | volume fills up / copy interrupted halfway | half a file passes as a complete database; on exFAT a failure does not necessarily delete the target |
 | D4 | commit the database to git | privacy leak + huge repo; and git merge is meaningless for this file |
 | D5 | different app versions on the two sides | schema migrations are usually one-way; going back breaks things |
-| D6 | "keep whichever was modified last" | see A3: 2-second granularity, cross-system offset — that judgement is luck |
+| D6 | "keep whichever was modified last" | see A3: 2 s (Windows) / 10 ms (macOS) granularity, cross-system offset — that judgement is luck |
 
 ---
 
 ## Unverified list (the honest boundary)
 
-I have **not** tested the following, either because there is no macOS environment here, or because it would genuinely destroy the only database I have:
+I have **not** tested the following, either because I lack the environment or because it would genuinely destroy the only database I have. Items since measured on macOS are marked in place:
 
-1. **Anything on the macOS side**: how the exFAT driver (kext) unmounts after a hard shutdown, what `fsck_exfat` actually "repairs", whether `.Spotlight-V100` / `.fseventsd` touch the database file while the app is writing, whether `lsof`-based liveness checks are reliable.
+1. **Crash / repair behaviour on macOS**: how the exFAT driver unmounts after a hard shutdown, what `fsck_exfat` actually "repairs", whether `.Spotlight-V100` / `.fseventsd` touch the database file while the app is writing. → Within this same item, **`lsof`-based liveness is now measured and reliable** (`lsof +D <dir>` accurately lists the holder of `state.db` / `state.db-wal`), and these probes produced no `._*` companion files on the volume.
 2. **A real power loss / really yanking the disk**: every "crash" conclusion here comes from `SIGKILL`. A kill only affects **file content**; a power loss also affects **filesystem structure** — and structure is exactly where exFAT has no journal. **Read this document as "the worst case is worse than what is written here".**
 3. **Behaviour when the exFAT volume fills up** (does it fail atomically, does it leave half a file).
-4. **Large databases after long runtimes** (everything here was measured at 145 MB).
-5. **The cause of the B5 anomaly.**
-6. **The cross-system mtime semantics difference** (the inferred half of A3).
+4. **Large databases after long runtimes** (everything here was measured at 145–148 MB).
+5. ~~**The cause of the B5 anomaly.**~~ → **Explained**; see B5: V8 GC collects the `DatabaseSync` handle and the connection is closed.
+6. **The cross-system mtime semantics difference** (the inferred half of A3). → Granularity is now measured (Windows 2 s / macOS 10 ms / APFS sub-millisecond); **the semantics (local time vs UTC interpretation) remain unverified**.
+7. **Whether Windows can read a symlink macOS created on exFAT** (see A5) — newly added.
+8. **Opening a WAL database read-only inside a non-writable directory**: on macOS this fails with `unable to open database file (14)` (no `-shm` can be created), and `?immutable=1` opens it but ignores the WAL. Documented in [`03`](03-recovery-runbook.en.md), but the harsher case of a read-only *mount* is untested.
 
 If you measure any of these on the macOS side, please open an issue — it is the part this document is most missing.

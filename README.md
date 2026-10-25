@@ -45,43 +45,62 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 
 - exFAT has no journal — a crash inside a write transaction can damage not just the file but the volume;
 - exFAT has no POSIX permissions — your database is readable by every account on the machine;
-- exFAT timestamps have **2-second** granularity, and the two systems' clocks drift — you cannot use mtime to decide which side is newer;
+- exFAT timestamps run from **10 ms (macOS) to 2 seconds (Windows driver)** — a **200×** spread on one and the same volume — and the two systems' clocks drift besides, so you cannot use mtime to decide which side is newer;
 - both systems see **the same bytes** but bring **their own cache, their own mount state, their own crash-recovery logic**.
 
 Everything below is the verifiable envelope around those two lines.
 
 ---
 
-## 📊 Measured (Windows side, Node 24 + SQLite 3.53.4)
+## 📊 Measured (Windows and macOS columns)
 
 Reproduce with [`lab/`](lab/README.en.md). All of it on a real dual-boot shared exFAT volume, not a simulation.
 
-| Property | Measured | Consequence |
-|---|---|---|
-| Volume | exFAT, hundreds of GB (plenty free) | no journal, no permissions, no hard links |
-| Allocation unit | **128 KiB** (a 1-byte file occupies 131,072 bytes) | a snapshot chain of small files wastes a lot of space |
-| mtime granularity | **2.000 s** (20 writes in 5 s produced 4 distinct timestamps) | ⚠️ **never judge recency by timestamp** |
-| Case sensitivity | insensitive: `CaseProbe.TXT` and `caseprobe.txt` are the same file; writing the lower name overwrites the upper | path checks and case-varied copies actively collide |
-| POSIX permissions | `chmod 0600` yields mode `666` | ⚠️ the database is world-readable on that machine |
-| Symlinks / hard links | both fail (`EISDIR`, errno −4068) | no link-based layout inside the volume |
-| `rename` over an existing file | **works** | ✔ atomic replacement available (the protocol needs it) |
-| Exclusive create `open(...,'wx')` | **works**; second writer gets `EEXIST` | ✔ lock primitive available |
-| SQLite cross-process locks | **work**: second process refused in both `delete` and `wal` modes (`database is locked`) | ✔ single-writer enforcement available |
-| WAL | works; `wal_checkpoint(TRUNCATE)` takes `-wal` to 0; a clean close removes `-wal`/`-shm` | handoff must checkpoint explicitly |
-| Commit cost | `journal_mode=delete`: **4.9–5.2 ms**; `wal`: **1.4–1.6 ms** (300 synchronous commits, two runs) | WAL is ~3.5× faster, at the cost of one more state to handle at handoff |
-| Cost of a 152 MB handoff | read 97–474 ms + write with fsync 221–237 ms + sha256 514–589 ms ≈ **0.9–1.2 s** (second read hit the file cache) | roughly one second per boot/shutdown |
-| ⚠️ Does the `-wal` file reach the disk? | **a child process committed 500 times in WAL mode and no `-wal` file existed on disk** (3 reproductions) | see conclusion 5: never use WAL presence/size as evidence |
-| A real database, checked | a few hundred MB (plus a multi-MB WAL), page 4096, freelist 4.5%, 22 tables, `integrity_check` = ok in 1141 ms | for this size, a physical runs in about a second |
+- **Windows column**: Node 24 + SQLite 3.53.4, raw output in [`lab/exfat-probe-result.json`](lab/exfat-probe-result.json)
+- **macOS column**: darwin / Node v24.22.1 + SQLite 3.53.4, raw output in [`lab/exfat-probe-result-macos.json`](lab/exfat-probe-result-macos.json). ⚠️ Three raw probe values there are **wrong** (mtime, permissions, the chmod no-op); the re-measured values and the reasoning are in that file's `corrections` block — read it before quoting the numbers.
+
+| Property | Windows side | macOS side | Consequence |
+|---|---|---|---|
+| Volume | exFAT, hundreds of GB (plenty free) | exFAT, same class of volume, mounted `noowners, noatime, fskit` | no journal, no permissions, no hard links |
+| Allocation unit | **128 KiB** (a 1-byte file occupies 131,072 bytes) | **128 KiB** (same 131,072 bytes) | a snapshot chain of small files wastes a lot of space |
+| mtime granularity | **2.000 s** (20 writes in 5 s produced 4 distinct timestamps) | **10 ms** (200 consecutive rewrites produced 78 distinct timestamps, positive steps always exactly 10.000 ms; APFS on the same machine: 200/200 distinct, sub-millisecond) | ⚠️ **never judge recency by timestamp** — one exFAT spec, two drivers, 200× apart |
+| Case sensitivity | insensitive: `CaseProbe.TXT` and `caseprobe.txt` are the same file; writing the lower name overwrites the upper | insensitive (writing the lower name overwrote the content) | path checks and case-varied copies actively collide |
+| POSIX permissions | `chmod 0600` yields mode `666` | mode is **frozen at `0o700`**: `chmod 600` / `777` / `000` change nothing and raise no error, and the file is still readable after `chmod 000` — **chmod is a complete no-op**, because the mount carries `noowners` | ⚠️ the database is world-readable on that machine; ⚠️ do not read `0700` as "permissions are enforced" |
+| Symlinks / hard links | both fail (`EISDIR`, errno −4068) | **symlinks work**: absolute and relative both create, `readlink` round-trips, the link follows and reads; **hard links fail** (`ENOTSUP`, errno −45) | a link-based layout is available on macOS; ⚠️ Windows still cannot create them, and **whether Windows can read a symlink macOS created on exFAT is UNVERIFIED** |
+| `rename` over an existing file | **works** | **works** (`ok:A`) | ✔ atomic replacement available (the protocol needs it) |
+| Exclusive create `open(...,'wx')` | **works**; second writer gets `EEXIST` | **works** (`blocked:EEXIST`) | ✔ lock primitive available |
+| SQLite cross-process locks | **work**: second process refused in both `delete` and `wal` modes | **work** (same `lab/` cases pass) | ✔ single-writer enforcement available |
+| WAL | works; `wal_checkpoint(TRUNCATE)` takes `-wal` to 0; a clean close removes `-wal`/`-shm` | works; `wal_checkpoint(TRUNCATE)` returned `{busy:0, log:0, checkpointed:0}`, `-wal` went to 0; after a clean close no wal/shm/journal remained | handoff must checkpoint explicitly |
+| Commit cost | `journal_mode=delete`: **4.9–5.2 ms**; `wal`: **1.4–1.6 ms** (300 synchronous commits) | `delete`: **14.23 ms**; `wal`: **1.89 ms** (300 synchronous commits) | WAL wins on both; `delete` is ~7.5× more expensive on macOS |
+| Cost of a 152 MB handoff | read + write-with-fsync + sha256 ≈ **0.9–1.2 s** | read 283 ms + write with fsync 455 ms + sha256 1327 ms = **2066 ms (≈2.1 s)**, write verified | roughly one to two seconds per boot/shutdown |
+| ⚠️ Does the `-wal` file reach the disk? | original claim: a child committed 500 times in WAL mode and no `-wal` existed on disk (3 reproductions) | **explained: not the volume and not a driver flag — V8 GC collects the `DatabaseSync` handle and the connection is closed** (see conclusion 5; reproduce with `node lab/b5-gc.mjs <dir>`) | never use WAL presence/size as evidence |
+| A real database, checked | a few hundred MB, page 4096, freelist 4.5%, 22 tables, `integrity_check` = ok in 1141 ms | **a few hundred MB (plus a sub-MB WAL), page 4096, freelist 1.3%, 22 tables, `integrity_check` = ok** | for this size, a physical runs in about a second |
 
 ### 🧠 Five conclusions
 
-1. **The locks are fine; the timestamps are not.** SQLite's cross-process locking works on exFAT, and so do `rename` and `open(wx)` — every primitive the protocol needs is there. The one thing that is broken is the naive "how long has this file been idle" test: 2-second granularity, incomparable across systems. **Hash the content; never trust mtime.**
-2. **Permissions are simply gone.** `chmod 600` fails silently. A database on this volume is readable by any account that can log in. Accept it, or make the volume encrypted — but don't pretend `chmod` protects you.
+1. **The locks are fine; the timestamps are not — and how badly depends on the driver.** SQLite's cross-process locking works on exFAT, and so do `rename` and `open(wx)`: every primitive the protocol needs is there. What breaks is the naive "how long has this file been idle" test, and it breaks inconsistently — one exFAT spec, 2 seconds under the Windows driver, 10 ms under macOS, a **200×** spread. "Unchanged here" may mean "just written there". **Hash the content; never trust mtime.**
+2. **Permissions are gone, and on macOS they put on a convincing costume.** On Windows `chmod` leaves mode `666`; on macOS, because the mount carries `noowners`, every file reads `0o700` and `chmod 777`/`000` neither works nor complains — the file is still readable after `chmod 000`. The real trap is that this turns checks into false positives: the probe's own `permissions_enforced` reported `true` on macOS, because it only tests `mode & 0o077 === 0` and macOS reports 0700 unconditionally. A database on this volume is readable by any account that can log in. Accept it, or make the volume encrypted — but don't pretend `chmod` protects you.
 3. **Case-insensitivity means "two files" can be one file.** Any design that keeps copies distinguished by case, or validates by path spelling, is wrong on this filesystem.
 4. **WAL makes you faster and hands you one more state to handle at handoff.** On a clean close SQLite checkpoints and removes `-wal`/`-shm` by itself; after a crash or a hard shutdown it does not. **The first step of any handoff is an explicit `PRAGMA wal_checkpoint(TRUNCATE)` — never hope the app did it on exit.**
-5. **One anomaly I could not explain (important).** A child process committed **500 times** in WAL mode, never closed, then got `SIGKILL`ed: throughout, there was **no `-wal` file on disk**, and all the data was already inside the 16 KB main file — another process read all 500 rows, `integrity_check` was ok, `journal_mode` still reported `wal`. **Reproduced 3 times.** The same operations from the parent process do produce a `-wal` (measured at 12,392 and 1,351,392 bytes in two runs).
-   Two candidate explanations, neither confirmed: **(a)** it is a connection-flag issue in `node:sqlite` (Node's built-in driver), nothing to do with the volume; **(b)** the volume's write cache makes WAL frames appear to land directly. Falsifying it takes the native `sqlite3` CLI doing the same experiment on the same volume — that is the single most welcome PR here.
-   The conclusion does not depend on the explanation, which makes it stronger: **never treat "is there a `-wal`", "-wal size" or "main file size" as evidence of anything.** Trust only hashes you computed, integrity checks you ran, and receipts you wrote.
+5. **The anomaly I could not explain is explained: it is V8's garbage collector, not the volume.** The original record was: a child process committed **500 times** in WAL mode, never closed, then got `SIGKILL`ed, and throughout there was **no `-wal` file on disk** while all the data sat inside the 16 KB main file. The observation is real, but it was **attributed to the wrong layer** — it has nothing to do with the filesystem.
+
+   `node:sqlite` closes its connection when the `DatabaseSync` object is **garbage-collected**. The original `crash-probe` child wrote its signal file and then span in a busy loop, **never referencing `h` again**; the handle became unreachable, got collected, and the connection was closed — and for SQLite, the last connection closing means **a clean close**: checkpoint the WAL into the main file, then delete `-wal`/`-shm`. The parent sampled exactly that post-close state, which made it look like the volume was swallowing WAL frames.
+
+   [`lab/b5-gc.mjs`](lab/b5-gc.mjs) turns it into a one-command A/B/C:
+
+   | Variant | exFAT | APFS |
+   |---|---|---|
+   | A: `h` never referenced again (`crash-probe` verbatim) | `-wal` gone **3/3** | gone **2/2** |
+   | B: one extra line, `globalThis.__keep = h` | gone **0/3** | gone **0/2** |
+   | C: explicit `h.close()` | gone 3/3, identical end state to A | same |
+
+   The only variable is **whether the JS handle is still referenced**. Filesystem, `journal_mode`, `synchronous` and explicit transactions were each ruled out separately (in every one of those combinations `-wal` stayed at 2,080,632 B and the main file at 4,096 B). APFS behaves identically, so the "volume write cache" explanation is dead; "a `node:sqlite` connection flag" is dead too — it was never a flag.
+
+   Two consequences, both now in the protocol:
+   - **No data was lost.** GC triggers a *clean* close: the WAL is checkpointed before deletion, and all 500 rows are in the main file. The danger is the **inference**, not the data.
+   - **A live process does not mean a live database.** A process can close its database without exiting — `ps` still shows state `R`, yet `lsof` shows not one `state.db` descriptor and the directory has no `-wal`/`-shm`. So test liveness with `lsof +D <dir>` (verified working on macOS/exFAT; it names the holder of `state.db` and `state.db-wal`), **not with `kill -0` and not by trusting the process name**.
+
+   The conclusion is therefore harder than before: **never treat "is there a `-wal`", "`-wal` size" or "main file size" as evidence of anything**, and never infer "the database is still open" from "the process is still running". Trust only hashes you computed, integrity checks you ran, and receipts you wrote.
 
 ---
 

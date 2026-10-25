@@ -1,0 +1,175 @@
+{
+  "lab": "/Volumes/Shared/_probe",
+  "platform": "darwin",
+  "node": "v24.22.1",
+  "at": "2026-10-25T20:08:07.058Z",
+  "source": "lab/exfat-probe.mjs",
+  "note": "Raw output of the unmodified probe. Three entries are WRONG as measurements and are corrected below in `corrections` — read that block before trusting mtime/permissions/symlink.",
+  "tests": {
+    "mtime_distinct_of_20_writes_5s": 20,
+    "mtime_granularity_seconds": 0.25,
+    "case_insensitive": true,
+    "case_collision": "wrote-through-lower-name",
+    "content_after_lowercase_write": "second",
+    "mode_after_chmod_0600": "0o700",
+    "permissions_enforced": true,
+    "links": {
+      "symlink": "ok",
+      "hardlink": "ENOTSUP/-45"
+    },
+    "rename_over_existing": "ok:A",
+    "exclusive_create_wx": "blocked:EEXIST",
+    "sqlite_version": "3.53.4",
+    "journal_mode_roundtrip": {
+      "delete": "delete",
+      "truncate": "truncate",
+      "persist": "persist",
+      "wal": "wal"
+    },
+    "commit_cost_300_sync_commits": {
+      "delete": {
+        "per_commit_ms": 14.23
+      },
+      "wal": {
+        "per_commit_ms": 1.89
+      }
+    },
+    "wal_bytes_while_open": 1351392,
+    "wal_checkpoint_truncate": {
+      "busy": 0,
+      "log": 0,
+      "checkpointed": 0
+    },
+    "wal_bytes_after_truncate": 0,
+    "integrity_check": "ok",
+    "transient_files_after_clean_close": {
+      "wal": false,
+      "shm": false,
+      "journal": false
+    },
+    "handoff_152MiB": {
+      "read_ms": 283,
+      "write_fsync_ms": 455,
+      "hash_ms": 1327,
+      "total_ms": 2066,
+      "write_verified": true
+    },
+    "one_byte_file_allocated_bytes": 131072
+  },
+
+  "corrections": {
+    "_why": "The probe measures three things in ways that do not survive scrutiny on macOS. Each was re-measured with a dedicated experiment; the corrected value replaces the probe field.",
+    "mtime_granularity_seconds": {
+      "probe_said": 0.25,
+      "corrected": 0.01,
+      "unit": "seconds (10 ms)",
+      "method": "200 consecutive rewrites of one file as fast as possible, reading fs.statSync({bigint:true}).mtimeNs each time; counted distinct values and the step size between consecutive distinct ones.",
+      "evidence": {
+        "writes": 200,
+        "distinct_timestamps": 78,
+        "min_positive_step_ms": 10.0,
+        "median_positive_step_ms": 10.0,
+        "max_positive_step_ms": 10.0
+      },
+      "interpretation": "exFAT stores mtime in 10 ms units and macOS honors that. 0.25 s was only the probe's own sampling interval (20 writes over 5 s), i.e. a floor imposed by the measurement, not a property of the volume. The 2.000 s figure reported on Windows is therefore a driver behavior, not an exFAT requirement — same spec, two drivers, 200x difference. Reference point: APFS on the same machine gave 200/200 distinct with sub-millisecond steps."
+    },
+    "mode_after_chmod_0600": {
+      "probe_said": "0o700",
+      "corrected": "0o700 — but chmod is a complete no-op, not an applied 0700",
+      "method": "write a file, stat mode, then chmod 0600 / 0777 / 0000 in turn, stat after each, and finally try to read the file back.",
+      "evidence": {
+        "mode_default": "0o700",
+        "mode_after_chmod_0600": "0o700",
+        "mode_after_chmod_0777": "0o700",
+        "mode_after_chmod_0000": "0o700",
+        "readable_after_chmod_0000": true
+      },
+      "interpretation": "mode is frozen at 0o700 by the mount, so every chmod appears to succeed and does nothing. Verified against APFS on the same machine, where chmod works normally (0o644 -> 0600 -> 0777 -> 0o000, and chmod 000 yields EACCES)."
+    },
+    "permissions_enforced": {
+      "probe_said": true,
+      "corrected": false,
+      "reason": "FALSE POSITIVE in the probe. It tests `(mode & 0o077) === 0`, which merely asks whether group/other bits are clear. macOS mounts exFAT with `noowners` and reports 0o700 for every file unconditionally, so the test passes without chmod having done anything. This is exactly the failure mode the finding warns about: a check that measures the mount's cosmetic default instead of enforcement."
+    },
+    "links": {
+      "probe_said": { "symlink": "ok", "hardlink": "ENOTSUP/-45" },
+      "corrected": "symlink: ok (confirmed real); hardlink: unsupported (confirmed)",
+      "symlink_verification": {
+        "lstat_is_symbolic_link": true,
+        "readlink_roundtrip": true,
+        "follow_and_read": "hello-from-target",
+        "relative_symlink_follows": true
+      },
+      "interpretation": "macOS can create real, followable symlinks inside an exFAT volume — absolute and relative. So the Windows-side blanket rule 'the volume cannot host a link layout' is false for macOS. Caveat: Windows still cannot create them, so the layout is not portable; and whether Windows can *read* a symlink macOS created on exFAT is UNVERIFIED (no Windows machine in this session)."
+    }
+  },
+
+  "extra_verification": {
+    "mount_options": "exfat, local, noowners, noatime, fskit — `noowners` is the reason chmod is inert and mode reads 0o700",
+    "volume": { "size": "hundreds of GiB", "available": "plenty free", "used_capacity": "71%" },
+    "lsof_can_detect_the_writer": {
+      "tool": "lsof +D <dir>",
+      "works": true,
+      "saw": ["state.db-shm (txt)", "state.db (12u)", "state.db-wal (13u)", "state.db-shm (14u)"],
+      "interpretation": "lsof +D is a reliable liveness check on this volume and is strictly better than `kill -0`: it names the holder and shows whether a -wal is actually open. Needed because a process can lose its database connection without exiting (see B5)."
+    },
+    "appledouble_noise": {
+      "created_by_these_probes": false,
+      "volume_root_already_has": 9,
+      "present": [".fseventsd", ".Spotlight-V100", ".TemporaryItems", ".Trashes", ".VolumeIcon.icns", "._.", "._<folder-A>", "._<folder-B>"],
+      "interpretation": "Node file operations on this volume did not generate ._* companions; the 9 at the root pre-date the probes (Windows-written items carrying extended attributes). Any directory walk still has to exclude them."
+    },
+    "real_library_health_check": {
+      "file": "/Volumes/Shared/mneme/memory.db",
+      "size_class": "hundreds of MiB",
+      "wal_bytes": 758112,
+      "shm_bytes": 32768,
+      "page_size": 4096,
+      "freelist_pct": 1.3,
+      "tables": 22,
+      "journal_mode": "wal",
+      "integrity_check": "ok"
+    }
+  },
+
+  "macos_only_traps": [
+    {
+      "id": "T1",
+      "trap": "Opening a WAL database read-only on the shared volume fails",
+      "symptom": "sqlite3 \"file:.../memory.db?mode=ro\" -> 'unable to open database file (14)'",
+      "cause": "A WAL reader must create / map the -shm file in the same directory. If the directory is not writable (or the volume is mounted read-only), SQLite cannot open the database at all — even though nothing is being written.",
+      "misleading_because": "The error says 'unable to open database file', which reads like 'the file is missing or corrupt' during an incident, when it actually means 'this directory is not writable'.",
+      "workaround": "?immutable=1 opens without -shm — but immutable=1 tells SQLite the file cannot change, so it IGNORES the WAL entirely. You will then read a stale database and may get 'no such table' for tables that exist only in the WAL. Never use immutable=1 to judge whether data is intact.",
+      "correct_move": "Copy the whole set (state.db + -wal + -shm) to a writable local directory first, then open the copy."
+    },
+    {
+      "id": "T2",
+      "trap": "A process can close its database without exiting",
+      "symptom": "The writer pid is alive (ps shows state R) yet holds no descriptor on state.db, and -wal/-shm are gone.",
+      "cause": "See B5: V8 garbage-collects the DatabaseSync object once the script no longer references it; node:sqlite closes the connection on finalization, and SQLite then checkpoints and deletes -wal/-shm by contract.",
+      "consequence": "`kill -0` / pid liveness does NOT prove the database is still open. Use `lsof +D <dir>` and look for state.db / state.db-wal.",
+      "note": "The close is clean, so no data is lost — the WAL is checkpointed into the main file first. The trap is the inference, not the data."
+    }
+  ],
+
+  "b5": {
+    "verdict": "EXPLAINED — not a volume artifact, not a node:sqlite connection-parameter issue",
+    "root_cause": "V8 GC finalization of the DatabaseSync handle. crash-probe's child performs 500 inserts, writes the signal file, then busy-waits WITHOUT ever touching the handle again. Once the handle is unreachable, GC collects it, node:sqlite closes the connection, and SQLite checkpoints + deletes -wal/-shm — exactly as a clean close would.",
+    "ab_test": {
+      "script": "lab/b5-gc.mjs",
+      "variants": {
+        "A_handle_unused": "verbatim crash-probe child; -wal disappeared 3/3 on exFAT, 2/2 on APFS",
+        "B_keep_alive": "same + `globalThis.__keep = h`; -wal disappeared 0/3 on exFAT, 0/2 on APFS",
+        "C_explicit_close": "same + explicit h.close(); disk end-state identical to A (db 4096 -> 16384, no -wal/-shm)"
+      },
+      "conclusion": "The only variable that matters is whether the JS handle is still referenced. Filesystem, journal_mode, synchronous setting and explicit transactions were all ruled out separately (lab/b5-bisect-style runs: every combination produced -wal = 2,080,632 B with a 4096 B main file while the handle was alive)."
+    },
+    "what_is_actually_true": [
+      "While the connection is open, the WAL is real and holds all the data: 500 rows -> -wal = 2,080,632 B, main file still 4,096 B.",
+      "A reader with a normal connection sees all 500 rows and journal_mode=wal.",
+      "The WAL is checkpointed and removed only when the last connection closes — cleanly or via GC finalization.",
+      "A db-only copy taken while a live -wal exists is NOT a valid handoff: it produced 500 rows here only because a checkpoint had already backfilled the main file; do not rely on that."
+    ],
+    "protocol_consequence": "Unchanged and reinforced: never infer anything from the presence, absence, or size of -wal, nor from the main file's size. Trust only your own hash, your own integrity_check, and your own receipt. And use lsof, not pid liveness, to decide whether the writer is really done."
+  }
+}

@@ -10,11 +10,13 @@ node lab/exfat-probe.mjs  X:\_probe                   # Windows
 node lab/crash-probe.mjs  /Volumes/Shared/_probe
 
 node lab/handoff-selftest.mjs /Volumes/Shared/_hstest # 18 assertions, a few seconds
+
+node lab/b5-gc.mjs         /Volumes/Shared/_b5gc        # the cause of B5: three-way A/B/C
 ```
 
 Requirement: **Node ≥ 22** (built-in `node:sqlite`, zero dependencies — which is why it was chosen: reproduce it with a bare Node, no `npm i`).
 
-All three stay inside directories they create and clean up on exit (`--keep` keeps them). `exfat-probe.mjs` also writes its result to `./exfat-probe-result.json` (the copy in this directory is the raw output of my run), so you can paste it straight into an issue.
+All four stay inside directories they create and clean up on exit (`--keep` keeps them). `exfat-probe.mjs` also writes its result to `./exfat-probe-result.json` (the copy in this directory is the raw output of the **Windows** run); the **macOS** run is `./exfat-probe-result-macos.json`, whose `corrections` block states which three raw probe values are wrong and why.
 
 <p>
   <a href="README.en.md"><img alt="English" src="https://img.shields.io/badge/English-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
@@ -40,6 +42,8 @@ All three stay inside directories they create and clean up on exit (`--keep` kee
 | `handoff_152MiB` | the real cost of one handoff | read 97–474 + write 221–237 + verify 514–589 ms ≈ **0.9–1.2 s** |
 | `one_byte_file_allocated_bytes` | how wasteful small files are | **131,072** (128 KiB clusters) |
 
+> 📱 **The macOS numbers are different, and not slightly**: full output in [`exfat-probe-result-macos.json`](exfat-probe-result-macos.json). Three key differences — mtime granularity is **10 ms** (not 2 s); `chmod` is a **complete no-op** while mode always reads `0o700`, so the probe's `permissions_enforced` is a **false positive** on macOS; and **symlinks work** (`EISDIR` is a Windows-only result).
+
 ## crash-probe.mjs — hot copy and hard kill
 
 It commits 500 rows in WAL mode from a child process, and then — while the child is still alive and has never checkpointed — does two things:
@@ -61,23 +65,27 @@ My output (**note: this contradicts intuition**):
 }
 ```
 
-**How to read it**: 500 rows were committed in WAL mode, the process is still alive, and there is **no `-wal` file on disk at all** — the data is already in the 16 KB main file. Reproduced 3 times.
+**How to read it**: 500 rows were committed in WAL mode, the process is still alive, and there is **no `-wal` file on disk at all** — the data is already in the 16 KB main file.
 
-This does not match the WAL contract and I could not explain it. Two candidates:
+This was recorded as "unexplained"; it is now explained: **not the volume — V8's garbage collector.**
 
-- **(a)** an issue with `node:sqlite`'s (Node's built-in driver) connection flags, unrelated to the volume;
-- **(b)** this volume's write-cache behaviour makes it *appear* to land directly.
+`node:sqlite` closes its connection when the `DatabaseSync` object is garbage-collected. That child wrote its signal file and then spun in a busy loop, **never referencing the handle again** → the handle became unreachable → it was collected → the connection closed. And for SQLite that is **a clean close**: checkpoint the WAL into the main file, then delete `-wal`/`-shm`. The parent sampled exactly that post-close state, so it looked like the volume was swallowing WAL frames.
 
-**How to falsify it**: run the same experiment on the same volume with the native `sqlite3` CLI (or Python's `sqlite3`):
+`b5-gc.mjs` turns it into a one-command A/B/C:
 
 ```bash
-sqlite3 probe.db "pragma journal_mode=wal; create table t(x); insert into t values(1);"
-ls -l probe.db*        # after an insert in WAL mode, -wal should exist and be non-empty
+node lab/b5-gc.mjs /Volumes/Shared/_b5gc
 ```
 
-If `-wal` is present there, it is (a) — please open an issue with both outputs. If it is absent there too, then this volume's behaviour deserves more suspicion than this document already gives it.
+| Variant | exFAT | APFS |
+|---|---|---|
+| A: `h` never referenced again (`crash-probe` verbatim) | `-wal` gone **3/3** | gone **2/2** |
+| B: one extra line, `globalThis.__keep = h` | gone **0/3** | gone **0/2** |
+| C: explicit `h.close()` | gone 3/3, end state identical to A | same |
 
-**Whatever the answer is, (a) or (b), the protocol does not change**: don't reason about the WAL's state — explicitly `wal_checkpoint(TRUNCATE)`, then hash, then check, then write the receipt.
+The only variable is **whether the JS handle is still referenced**; filesystem, `journal_mode`, `synchronous` and explicit transactions were each ruled out separately (in every such combination `-wal` stayed at 2,080,632 B and the main file at 4,096 B). So both original candidates — (a) connection flags, (b) volume write cache — **are wrong**.
+
+**The protocol does not change, and now has a better reason**: don't reason about the WAL's state — explicitly `wal_checkpoint(TRUNCATE)`, then hash, then check, then write the receipt. Also: test liveness with `lsof +D <dir>`, not `kill -0` — a process can be perfectly alive having already closed the database.
 
 ---
 
@@ -106,12 +114,12 @@ Result on my disk:
 all good: 18 passed, 0 failed
 ```
 
-**What it cannot prove**: the data is generated by the script, not your database; it runs on your volume, but it will **not** verify macOS-side behaviour (that needs actually booting into macOS). The real rehearsal is still [../docs/03-recovery-runbook.en.md](../docs/03-recovery-runbook.en.md) §0: archive a copy first, then act.
+**What it cannot prove**: the data is generated by the script, not your database. It also ran once on macOS (`all good: 18 passed, 0 failed`), but both runs still use "a small database the script invented" and cannot replace rehearsing against your own real database. The real rehearsal is still [../docs/03-recovery-runbook.en.md](../docs/03-recovery-runbook.en.md) §0: archive a copy first, then act.
 
 ---
 
 ## Notes
 
-- These three scripts **do** create and delete files on the volume. Do not point them at your production directory; point them at an empty one.
+- These four scripts **do** create and delete files on the volume. Do not point them at your production directory; point them at an empty one.
 - `crash-probe.mjs` `SIGKILL`s a child process it started — do not change it to kill the current process, that would kill you.
 - I set `stdio` to `'ignore'` and pass results back through files because some sandboxes forbid inter-process pipes. Pipes are fine in a normal environment, but files are more reliable. Same for `handoff-selftest.mjs` (child output goes to `.selftest-child.log`).

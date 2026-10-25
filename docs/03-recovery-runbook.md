@@ -26,6 +26,35 @@ robocopy "X:\state" $dst /MIR /R:0 /W:0
 
 **如果这一步因为"文件被占用"失败**，说明应用还在跑 —— 先退干净（含托盘），再重试。别用"复制出来一份能读的就行"糊弄过去：你要留下的是**原始不可读状态**，那才是证据，也是唯一可能恢复的东西。
 
+### ⚠️ 0.1 别在共享盘上"只读打开"看一眼 —— 那个报错会骗你
+
+你复制现场是为了判断"它还能不能读"。**千万不要直接对共享卷上的原库做只读打开**：
+
+```bash
+# macOS 上，这一行会报 "unable to open database file"（errno 14）
+sqlite3 "file:/Volumes/Shared/state/db/state.db?mode=ro" "PRAGMA integrity_check;"
+```
+
+原因不是文件丢了、也不是库坏了：**WAL 模式的读者必须在同目录创建 / 映射 `-shm`**。目录不可写（或卷只读挂载）时 SQLite 连打开都做不到，于是吐出一个看起来像"文件不存在 / 库已损坏"的错误。出事当天看到这个错误，极容易直接误判成"库没了"，去做一次不必要的回滚。
+
+最诱人也最危险的做法是加 `?immutable=1`：
+
+```bash
+sqlite3 "file:/Volumes/Shared/state/db/state.db?immutable=1" ".tables"   # 能打开，但是……
+```
+
+`immutable=1` 等于向 SQLite 保证"这个文件不会变"，于是它**完全忽略 WAL**。你会读到一个少了一批数据的旧库，甚至对只存在于 WAL 里的表报 `no such table` —— 又回到"误判数据丢了"。
+
+**正确做法：先把整个集合复制到可写的本地目录，再在副本上检查。**
+
+```bash
+mkdir -p ~/state-inspect
+cp -a /Volumes/Shared/state/db/state.db* ~/state-inspect/     # db + -wal + -shm 一起
+sqlite3 -readonly ~/state-inspect/state.db "PRAGMA integrity_check;"
+```
+
+`state.db*` 会把 `-wal` 和 `-shm` 一并带上。**只复制 `state.db` 就是在丢数据**（见 [01·B2](01-failure-modes.md) 与 [01·B5](01-failure-modes.md)）。
+
 ---
 
 ## 1. 先判断是哪一类（不要跳步）
@@ -48,13 +77,17 @@ robocopy "X:\state" $dst /MIR /R:0 /W:0
    └─ 不一致 → 走 §3
 ```
 
-只读打开、绝不写入的方式：
+只读打开、绝不写入的方式 —— **先看 §0.1：直接在共享盘上只读打开，要么打不开，要么骗你。**
+
+最稳的不是"想办法只读打开原库"，而是**在副本上检查**：
 
 ```bash
-sqlite3 "file:/Volumes/Shared/state/db/state.db?mode=ro&immutable=1" "PRAGMA integrity_check;"
+mkdir -p ~/state-inspect
+cp -a /Volumes/Shared/state/db/state.db* ~/state-inspect/    # db + -wal + -shm
+sqlite3 -readonly ~/state-inspect/state.db "PRAGMA integrity_check;"
 ```
 
-> `immutable=1` 的意思是"我保证不会有人写它"。**只有在确认应用已退出、且你只是要看一眼时才用**。用了 `immutable` 而其实有别的进程在写，你会读到不一致的快照。
+> `immutable=1` 只在**确认应用已退出、且 `-wal` 不存在（或已 checkpoint 归零）**时才安全；否则它会忽略 WAL，给你一个不一致的旧快照。
 
 ---
 
@@ -64,9 +97,8 @@ sqlite3 "file:/Volumes/Shared/state/db/state.db?mode=ro&immutable=1" "PRAGMA int
 
 ### 2.1 先体检，别急着回滚
 
-```bash
-sqlite3 -readonly "/Volumes/Shared/state/db/state.db" "PRAGMA integrity_check;"
-```
+# 在 §0.1 复制出来的本地副本上体检（不要在共享卷原库上打开）
+sqlite3 -readonly ~/state-inspect/state.db "PRAGMA integrity_check;"
 
 | 结果 | 动作 |
 |---|---|
@@ -81,9 +113,9 @@ sqlite3 -readonly "/Volumes/Shared/state/db/state.db" "PRAGMA integrity_check;"
 结构 ok ≠ 数据没丢（见 [01·B4](01-failure-modes.md#b4-integrity_check-通过--数据完整-推理但很重要)）。跟上一份收据里的 `content_digest` 对一下：
 
 ```bash
-sqlite3 -readonly "…/state.db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table';"
+sqlite3 -readonly ~/state-inspect/state.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';"
 # 行数按你自己的表来，例如：
-sqlite3 -readonly "…/state.db" "SELECT COUNT(*) FROM <你的主表>;"
+sqlite3 -readonly ~/state-inspect/state.db "SELECT COUNT(*) FROM <你的主表>;"
 ```
 
 如果行数**明显比收据里少**，说明中间发生过一次回滚或替换 —— 别继续用，按 §4 找 `abandoned-*`。
@@ -179,7 +211,7 @@ sqlite3 /tmp/recovered.db "PRAGMA integrity_check;"
 | 看到 `DIRTY` 就回滚 | 大多数情况体检是好的，回滚等于白扔数据 |
 | 删除 `abandoned-*` | 那是唯一还能捞数据的东西 |
 | 在共享盘上就地跑修复工具 | 就地重写，失败即彻底丢失；exFAT 无日志，没法回退 |
-| 用"最近修改时间"选保留哪份 | 粒度 2 秒 + 跨系统时区偏移（01·A3），基本等于随机 |
+| 用"最近修改时间"选保留哪份 | 粒度 2 秒（Windows）/ 10 毫秒（macOS）+ 跨系统时区偏移（01·A3），基本等于随机 |
 | 另一台机器/另一个系统上"顺便看一下" | 你正在制造第二次并发访问 |
 | 急着重装应用 / 重建库 | 重建会静默产生一个空库，然后"正常"覆盖一切 |
 

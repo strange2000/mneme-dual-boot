@@ -5,7 +5,7 @@
   <a href="README.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-2f81f7?style=flat-square&amp;logo=googletranslate&amp;logoColor=white"></a>
 </p>
 
-这三个脚本产出 README 表格里的每一个数字，并验证 `handoff.mjs` 的行为。**请在自己的卷上跑一遍** —— 我的数字只属于我这块盘。
+这四个脚本产出 README 表格里的每一个数字，并验证 `handoff.mjs` 的行为。**请在自己的卷上跑一遍** —— 我的数字只属于我这块盘：macOS 上的 mtime 粒度就和我这块盘差了 200 倍。
 
 ```bash
 # 目录参数必须是**共享卷上**的路径，脚本会创建并删除自己的临时文件
@@ -15,11 +15,13 @@ node lab/exfat-probe.mjs  X:\_probe                   # Windows
 node lab/crash-probe.mjs  /Volumes/Shared/_probe
 
 node lab/handoff-selftest.mjs /Volumes/Shared/_hstest # 18 个断言，几秒钟
+
+node lab/b5-gc.mjs         /Volumes/Shared/_b5gc        # B5 的成因：A/B/C 三组对照
 ```
 
 要求：**Node ≥ 22**（用的是内置 `node:sqlite`，不需要装任何依赖 —— 这也是选它的原因：一个裸 Node 就能复现，不用 `npm i`）。
 
-三个脚本都只在自己创建的目录里活动，结束时会删掉（`--keep` 可保留）。`exfat-probe.mjs` 还会把结果写成 `./exfat-probe-result.json`（本目录里那份就是我这次运行的原始输出），方便直接贴进 issue。
+四个脚本都只在自己创建的目录里活动，结束时会删掉（`--keep` 可保留）。`exfat-probe.mjs` 会把结果写成 `./exfat-probe-result.json`（本目录里那份是 **Windows 侧**的原始输出）；**macOS 侧**在 `./exfat-probe-result-macos.json`，其中三项探针原始值是错的，重测值与理由写在它的 `corrections` 段里。
 
 ---
 
@@ -39,6 +41,8 @@ node lab/handoff-selftest.mjs /Volumes/Shared/_hstest # 18 个断言，几秒钟
 | `transient_files_after_clean_close` | 干净关闭后还剩什么 | 全都没了 ✔ |
 | `handoff_152MiB` | 一次交接的实际代价 | 读 97–474 + 写 221–237 + 校验 514–589 ms ≈ **0.9–1.2 s** |
 | `one_byte_file_allocated_bytes` | 小文件有多浪费 | **131,072**（128 KiB 簇） |
+
+> 📱 **macOS 侧的数字不一样，而且差别不小**：完整结果见 [`exfat-probe-result-macos.json`](exfat-probe-result-macos.json)。三处关键差异 —— mtime 粒度 **10 ms**（不是 2 s）；`chmod` 是**彻底空操作**但 mode 恒报 `0o700`，所以探针的 `permissions_enforced` 在 macOS 上是**假阳性**；**符号链接能建**（`EISDIR` 只在 Windows 上出现）。
 
 ## crash-probe.mjs —— 热拷贝与强杀
 
@@ -61,23 +65,27 @@ node lab/handoff-selftest.mjs /Volumes/Shared/_hstest # 18 个断言，几秒钟
 }
 ```
 
-**读法**：在 WAL 模式下提交了 500 行、进程还活着，磁盘上却**根本没有 `-wal` 文件**，数据已经在 16 KB 的主文件里。复现 3 次。
+**读法**：在 WAL 模式下提交了 500 行、进程还活着，磁盘上却**根本没有 `-wal` 文件**，数据已经在 16 KB 的主文件里。
 
-这与 WAL 的契约不符，我没能解释。两个候选：
+这个现象当初被记成"无法解释"，现在查清了：**不是卷，是 V8 的垃圾回收。**
 
-- **(a)** 是 `node:sqlite`（Node 内置驱动）的连接参数问题，与卷无关；
-- **(b)** 是这个卷的写缓存行为让它"看起来"直接落地。
+`node:sqlite` 的连接会在 `DatabaseSync` 对象被 GC 回收时关闭。这个子进程写完信号文件就开始空转，**之后再没引用过句柄** → 句柄不可达 → 被回收 → 连接被关闭。而连接关闭对 SQLite 就是一次**干净的 close**：先把 WAL checkpoint 进主文件，再删掉 `-wal`/`-shm`。父进程采到的正是"关闭之后"的终态，于是看起来像 WAL 帧被卷直接吞了。
 
-**怎么证伪**：在同一块卷上，用原生 `sqlite3` CLI（或 Python `sqlite3`）做同一实验：
+`b5-gc.mjs` 把它做成了 A/B/C，一条命令就能证实：
 
 ```bash
-sqlite3 probe.db "pragma journal_mode=wal; create table t(x); insert into t values(1);"
-ls -l probe.db*        # WAL 模式下执行完 insert 后，-wal 应该存在且非空
+node lab/b5-gc.mjs /Volumes/Shared/_b5gc
 ```
 
-如果那边 `-wal` 正常存在，就是 (a)，请开 issue 并附上两边的输出；如果那边也没有，那这个卷的行为比本文写的更值得警惕。
+| 变体 | exFAT | APFS |
+|---|---|---|
+| A：`h` 之后不再被引用（`crash-probe` 原样） | `-wal` 消失 **3/3** | 消失 **2/2** |
+| B：加一句 `globalThis.__keep = h` | 消失 **0/3** | 消失 **0/2** |
+| C：显式 `h.close()` | 消失 3/3，盘上终态与 A 一致 | 同 |
 
-**无论结论是 (a) 还是 (b)，协议的做法不变**：不要推理 WAL 的状态，显式 `wal_checkpoint(TRUNCATE)`，然后再算哈希、再体检、再写收据。
+唯一变量是 **JS 句柄是否还被引用**；文件系统、`journal_mode`、`synchronous`、显式事务都被分别排除（那些组合下 `-wal` 始终 2,080,632 B、主文件始终 4,096 B）。所以原来那两个候选解释 —— (a) 连接参数、(b) 卷写缓存 —— **都不成立**。
+
+**协议的做法不变，而且理由更硬**：不要推理 WAL 的状态，显式 `wal_checkpoint(TRUNCATE)`，然后再算哈希、再体检、再写收据。另外，判活要用 `lsof +D <目录>`，不要用 `kill -0` —— 进程完全可能还活着，但已经把库关了。
 
 ---
 
@@ -106,12 +114,12 @@ node lab/handoff-selftest.mjs X:\_hstest
 all good: 18 passed, 0 failed
 ```
 
-**它不能证明什么**：这是脚本自己造的数据，不是你的库；它跑在你这块卷上，但**不会**验 macOS 侧的行为（那需要真的开机进 macOS）。真正的演练仍然是 [../docs/03-recovery-runbook.md](../docs/03-recovery-runbook.md) §0：先留档一份，再动手。
+**它不能证明什么**：这是脚本自己造的数据，不是你的库。它在 macOS 上也跑过一遍（`all good: 18 passed, 0 failed`），但两端跑的都还是"脚本造的小库"，不能代替拿你自己那份真库演练。真正的演练仍然是 [../docs/03-recovery-runbook.md](../docs/03-recovery-runbook.md) §0：先留档一份，再动手。
 
 ---
 
 ## 注意
 
-- 这三个脚本**会**在卷上创建/删除文件。不要指向你的生产目录，指一个空目录。
+- 这四个脚本**会**在卷上创建/删除文件。不要指向你的生产目录，指一个空目录。
 - `crash-probe.mjs` 会 `SIGKILL` 它自己启动的子进程 —— 不要改成本进程，那会把你自己杀掉。
 - 我把 `stdio` 设成 `'ignore'`、用文件做回传，是因为某些沙箱禁止进程间管道。普通环境用管道也行，但文件更可靠。`handoff-selftest.mjs` 同理（子进程输出写进 `.selftest-child.log`）。

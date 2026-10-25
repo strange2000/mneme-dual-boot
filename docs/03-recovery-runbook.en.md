@@ -26,6 +26,35 @@ robocopy "X:\state" $dst /MIR /R:0 /W:0
 
 **If this step fails because "the file is in use"**, something is still running — exit it cleanly (including tray processes) and try again. Don't fudge it with "well, I got a readable copy out": what you want to keep is the **original unreadable state**, which is the evidence and the only thing that might still be recoverable.
 
+### ⚠️ 0.1 Never "take a read-only peek" on the shared volume — the error lies to you
+
+You copied the scene in order to decide "is this still readable". **Do not open the original database on the shared volume read-only**:
+
+```bash
+# on macOS this line fails with "unable to open database file" (errno 14)
+sqlite3 "file:/Volumes/Shared/state/db/state.db?mode=ro" "PRAGMA integrity_check;"
+```
+
+The cause is neither a missing file nor a corrupt database: **a WAL reader must create / map the `-shm` file in the same directory**. When the directory is not writable (or the volume is mounted read-only), SQLite cannot even open the database, and reports something that reads like "file missing / database corrupt". On the day of an incident, that error all but invites you to conclude the database is gone and perform a pointless rollback.
+
+The most tempting and most dangerous move is to add `?immutable=1`:
+
+```bash
+sqlite3 "file:/Volumes/Shared/state/db/state.db?immutable=1" ".tables"   # opens fine, but…
+```
+
+`immutable=1` promises SQLite that the file cannot change, and therefore it **ignores the WAL entirely**. You will read a stale database missing a batch of rows, and may even get `no such table` for tables that exist only in the WAL — straight back into "the data is gone".
+
+**The right move: copy the whole set to a writable local directory first, then inspect the copy.**
+
+```bash
+mkdir -p ~/state-inspect
+cp -a /Volumes/Shared/state/db/state.db* ~/state-inspect/     # db + -wal + -shm together
+sqlite3 -readonly ~/state-inspect/state.db "PRAGMA integrity_check;"
+```
+
+`state.db*` picks up `-wal` and `-shm` along with the database. **Copying `state.db` alone is data loss** (see [01·B2](01-failure-modes.en.md) and [01·B5](01-failure-modes.en.md)).
+
 ---
 
 ## 1. Decide which category you are in (do not skip steps)
@@ -48,13 +77,17 @@ robocopy "X:\state" $dst /MIR /R:0 /W:0
    └─ differs → go to §3
 ```
 
-Read-only, guaranteed-no-write open:
+Read-only, guaranteed-no-write open — **but read §0.1 first: opening the original on the shared volume either fails outright or lies to you.**
+
+The reliable route is not "find a way to open the original read-only", but **inspect the copy**:
 
 ```bash
-sqlite3 "file:/Volumes/Shared/state/db/state.db?mode=ro&immutable=1" "PRAGMA integrity_check;"
+mkdir -p ~/state-inspect
+cp -a /Volumes/Shared/state/db/state.db* ~/state-inspect/    # db + -wal + -shm
+sqlite3 -readonly ~/state-inspect/state.db "PRAGMA integrity_check;"
 ```
 
-> `immutable=1` means "I promise nobody will write this". **Only use it when you have confirmed the app has exited and you just want to look.** Using `immutable` while another process is actually writing gives you an inconsistent snapshot.
+> `immutable=1` is safe only when you have **confirmed the app has exited AND there is no `-wal` (or it has been checkpointed to zero)**; otherwise it ignores the WAL and hands you an inconsistent stale snapshot.
 
 ---
 
@@ -64,9 +97,8 @@ This is the **most common** situation, and **most of the time it does not need a
 
 ### 2.1 Examine it first; don't rush to roll back
 
-```bash
-sqlite3 -readonly "/Volumes/Shared/state/db/state.db" "PRAGMA integrity_check;"
-```
+# examine the LOCAL copy made in §0.1 (do not open the original on the shared volume)
+sqlite3 -readonly ~/state-inspect/state.db "PRAGMA integrity_check;"
 
 | Result | Action |
 |---|---|
@@ -81,9 +113,9 @@ sqlite3 -readonly "/Volumes/Shared/state/db/state.db" "PRAGMA integrity_check;"
 Intact structure ≠ nothing lost (see [01·B4](01-failure-modes.en.md)). Compare with `content_digest` from the previous receipt:
 
 ```bash
-sqlite3 -readonly "…/state.db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table';"
+sqlite3 -readonly ~/state-inspect/state.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';"
 # row counts depend on your own tables, e.g.:
-sqlite3 -readonly "…/state.db" "SELECT COUNT(*) FROM <your_main_table>;"
+sqlite3 -readonly ~/state-inspect/state.db "SELECT COUNT(*) FROM <your main table>;"
 ```
 
 If the row count is **clearly lower than the receipt says**, a rollback or replacement happened somewhere — stop using it and look for `abandoned-*` per §4.
@@ -179,7 +211,7 @@ sqlite3 /tmp/recovered.db "PRAGMA integrity_check;"
 | roll back the moment you see `DIRTY` | in most cases the checks pass, and a rollback throws data away for nothing |
 | delete `abandoned-*` | it is the only thing left that might still hold the data |
 | run a repair tool in place on the shared volume | in-place rewrite; failure is total loss, and exFAT has no journal to fall back on |
-| keep whichever copy has the "most recent modification time" | 2-second granularity + cross-system timezone offset (01·A3); essentially a coin flip |
+| keep whichever copy has the "most recent modification time" | 2 s (Windows) / 10 ms (macOS) granularity + cross-system timezone offset (01·A3); essentially a coin flip |
 | "just take a quick look" from the other machine / the other system | you are creating the second concurrent access |
 | hastily reinstall the app / rebuild the database | rebuilding silently produces an empty database, which then "normally" overwrites everything |
 
