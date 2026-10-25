@@ -11,8 +11,7 @@ snapshots/
 handoff.json
 DIRTY
 
-# Probe by-products
-exfat-probe-result.json
+# Probe by-products (lab/exfat-probe-result.json is the one real run, kept as evidence)
 
 # OS noise (this project exists because of it, so keep it out of the repo)
 .DS_Store

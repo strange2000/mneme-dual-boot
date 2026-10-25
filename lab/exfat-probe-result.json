@@ -1,0 +1,57 @@
+{
+  "lab": "E:\\_probe",
+  "platform": "win32",
+  "node": "v24.22.1",
+  "at": "2026-10-25T18:24:47.968Z",
+  "tests": {
+    "mtime_distinct_of_20_writes_5s": 4,
+    "mtime_granularity_seconds": 2,
+    "case_insensitive": true,
+    "case_collision": "wrote-through-lower-name",
+    "content_after_lowercase_write": "second",
+    "mode_after_chmod_0600": "0o666",
+    "permissions_enforced": false,
+    "links": {
+      "symlink": "EISDIR/-4068",
+      "hardlink": "EISDIR/-4068"
+    },
+    "rename_over_existing": "ok:A",
+    "exclusive_create_wx": "blocked:EEXIST",
+    "sqlite_version": "3.53.4",
+    "journal_mode_roundtrip": {
+      "delete": "delete",
+      "truncate": "truncate",
+      "persist": "persist",
+      "wal": "wal"
+    },
+    "commit_cost_300_sync_commits": {
+      "delete": {
+        "per_commit_ms": 4.91
+      },
+      "wal": {
+        "per_commit_ms": 1.36
+      }
+    },
+    "wal_bytes_while_open": 1351392,
+    "wal_checkpoint_truncate": {
+      "busy": 0,
+      "log": 0,
+      "checkpointed": 0
+    },
+    "wal_bytes_after_truncate": 0,
+    "integrity_check": "ok",
+    "transient_files_after_clean_close": {
+      "wal": false,
+      "shm": false,
+      "journal": false
+    },
+    "handoff_152MiB": {
+      "read_ms": 97,
+      "write_fsync_ms": 237,
+      "hash_ms": 589,
+      "total_ms": 924,
+      "write_verified": true
+    },
+    "one_byte_file_allocated_bytes": 131072
+  }
+}
