@@ -1,0 +1,5 @@
+# Everything here is prose + small scripts. Keep line endings identical for
+# everyone so diffs stay readable across the two systems this project is about.
+* text=auto eol=lf
+*.mjs text eol=lf
+*.md text eol=lf
