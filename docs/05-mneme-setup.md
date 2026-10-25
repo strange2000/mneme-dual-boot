@@ -153,4 +153,4 @@ node handoff.mjs open  E:/mneme --owner windows     # 0 = 可以开 DSH
 node handoff.mjs close E:/mneme --owner windows     # 0 = 干净封箱，可以关机
 ```
 
-macOS 那头把 `E:/mneme` 换成 `/Volumes/Shared/mneme`、`--owner` 换成 `macos`，其余一模一样。
+macOS 那头把 `E:/mneme` 换成 `/Volumes/<你的卷>/mneme`、`--owner` 换成 `macos`，其余一模一样。

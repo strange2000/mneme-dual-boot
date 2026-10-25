@@ -176,7 +176,7 @@ Across dual boot the shared volume's drive letter / mount point differs, and may
 
 I have **not** tested the following, either because I lack the environment or because it would genuinely destroy the only database I have. Items since measured on macOS are marked in place:
 
-1. **Crash / repair behaviour on macOS**: how the exFAT driver unmounts after a hard shutdown, what `fsck_exfat` actually "repairs", whether `.Spotlight-V100` / `.fseventsd` touch the database file while the app is writing. → Within this same item, **`lsof`-based liveness is now measured and reliable** (`lsof +D <dir>` accurately lists the holder of `state.db` / `state.db-wal`), and these probes produced no `._*` companion files on the volume.
+1. **Crash / repair behaviour on macOS**: how the exFAT driver unmounts after a hard shutdown, what `fsck_exfat` actually "repairs", and whether Spotlight / `.fseventsd` touch the database while the app is writing. (What *is* now measured and dependable on macOS: `lsof +D <dir>` as a liveness check — it names the holder of `state.db` / `state.db-wal` — and that these probes produced no `._*` companion files.)
 2. **A real power loss / really yanking the disk**: every "crash" conclusion here comes from `SIGKILL`. A kill only affects **file content**; a power loss also affects **filesystem structure** — and structure is exactly where exFAT has no journal. **Read this document as "the worst case is worse than what is written here".**
 3. **Behaviour when the exFAT volume fills up** (does it fail atomically, does it leave half a file).
 4. **Large databases after long runtimes** (everything here was measured at 145–148 MB).

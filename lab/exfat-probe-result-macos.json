@@ -1,5 +1,5 @@
 {
-  "lab": "/Volumes/Shared/_probe",
+  "lab": "/Volumes/<shared-volume>/_probe",
   "platform": "darwin",
   "node": "v24.22.1",
   "at": "2026-10-25T20:08:07.058Z",
@@ -56,7 +56,6 @@
     },
     "one_byte_file_allocated_bytes": 131072
   },
-
   "corrections": {
     "_why": "The probe measures three things in ways that do not survive scrutiny on macOS. Each was re-measured with a dedicated experiment; the corrected value replaces the probe field.",
     "mtime_granularity_seconds": {
@@ -92,7 +91,10 @@
       "reason": "FALSE POSITIVE in the probe. It tests `(mode & 0o077) === 0`, which merely asks whether group/other bits are clear. macOS mounts exFAT with `noowners` and reports 0o700 for every file unconditionally, so the test passes without chmod having done anything. This is exactly the failure mode the finding warns about: a check that measures the mount's cosmetic default instead of enforcement."
     },
     "links": {
-      "probe_said": { "symlink": "ok", "hardlink": "ENOTSUP/-45" },
+      "probe_said": {
+        "symlink": "ok",
+        "hardlink": "ENOTSUP/-45"
+      },
       "corrected": "symlink: ok (confirmed real); hardlink: unsupported (confirmed)",
       "symlink_verification": {
         "lstat_is_symbolic_link": true,
@@ -103,24 +105,42 @@
       "interpretation": "macOS can create real, followable symlinks inside an exFAT volume — absolute and relative. So the Windows-side blanket rule 'the volume cannot host a link layout' is false for macOS. Caveat: Windows still cannot create them, so the layout is not portable; and whether Windows can *read* a symlink macOS created on exFAT is UNVERIFIED (no Windows machine in this session)."
     }
   },
-
   "extra_verification": {
     "mount_options": "exfat, local, noowners, noatime, fskit — `noowners` is the reason chmod is inert and mode reads 0o700",
-    "volume": { "size": "hundreds of GiB", "available": "plenty free", "used_capacity": "71%" },
+    "volume": {
+      "size": "hundreds of GiB",
+      "available": "plenty free",
+      "used_capacity": "71%"
+    },
     "lsof_can_detect_the_writer": {
       "tool": "lsof +D <dir>",
       "works": true,
-      "saw": ["state.db-shm (txt)", "state.db (12u)", "state.db-wal (13u)", "state.db-shm (14u)"],
+      "saw": [
+        "state.db-shm (txt)",
+        "state.db (12u)",
+        "state.db-wal (13u)",
+        "state.db-shm (14u)"
+      ],
       "interpretation": "lsof +D is a reliable liveness check on this volume and is strictly better than `kill -0`: it names the holder and shows whether a -wal is actually open. Needed because a process can lose its database connection without exiting (see B5)."
     },
     "appledouble_noise": {
       "created_by_these_probes": false,
       "volume_root_already_has": 9,
-      "present": [".fseventsd", ".Spotlight-V100", ".TemporaryItems", ".Trashes", ".VolumeIcon.icns", "._.", "._<folder-A>", "._<folder-B>"],
-      "interpretation": "Node file operations on this volume did not generate ._* companions; the 9 at the root pre-date the probes (Windows-written items carrying extended attributes). Any directory walk still has to exclude them."
+      "present": [
+        ".fseventsd",
+        ".Spotlight-V100",
+        ".TemporaryItems",
+        ".Trashes",
+        ".VolumeIcon.icns",
+        "._.",
+        "._<folder-A>",
+        "._<folder-B>"
+      ],
+      "interpretation": "Node file operations on this volume did not generate ._* companions; the 9 at the root pre-date the probes (Windows-written items carrying extended attributes). Any directory walk still has to exclude them.",
+      "names_redacted": true
     },
     "real_library_health_check": {
-      "file": "/Volumes/Shared/mneme/memory.db",
+      "file": "/Volumes/<shared-volume>/mneme/memory.db",
       "size_class": "hundreds of MiB",
       "wal_bytes": 758112,
       "shm_bytes": 32768,
@@ -131,7 +151,6 @@
       "integrity_check": "ok"
     }
   },
-
   "macos_only_traps": [
     {
       "id": "T1",
@@ -151,7 +170,6 @@
       "note": "The close is clean, so no data is lost — the WAL is checkpointed into the main file first. The trap is the inference, not the data."
     }
   ],
-
   "b5": {
     "verdict": "EXPLAINED — not a volume artifact, not a node:sqlite connection-parameter issue",
     "root_cause": "V8 GC finalization of the DatabaseSync handle. crash-probe's child performs 500 inserts, writes the signal file, then busy-waits WITHOUT ever touching the handle again. Once the handle is unreachable, GC collects it, node:sqlite closes the connection, and SQLite checkpoints + deletes -wal/-shm — exactly as a clean close would.",

@@ -153,4 +153,4 @@ node handoff.mjs open  E:/mneme --owner windows     # 0 = you may start DSH
 node handoff.mjs close E:/mneme --owner windows     # 0 = sealed cleanly, you may shut down
 ```
 
-On the macOS side, swap `E:/mneme` for `/Volumes/Shared/mneme` and `--owner` for `macos`; everything else is identical.
+On the macOS side, swap `E:/mneme` for `/Volumes/<your-volume>/mneme` (whatever the shared volume is mounted as) and `--owner` for `macos`; everything else is identical.
