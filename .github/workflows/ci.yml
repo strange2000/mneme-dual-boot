@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: syntax check
+        run: |
+          for f in handoff.mjs lab/*.mjs; do
+            echo "checking $f"
+            node --check "$f"
+          done
+
+      # The self-test is designed to run on the volume you actually intend to use.
+      # On CI it runs on an ordinary directory, which checks the protocol logic
+      # (exit codes, receipt contents, DIRTY handling) but not the filesystem.
+      - name: protocol self-test
+        run: node lab/handoff-selftest.mjs "$RUNNER_TEMP/handoff"
