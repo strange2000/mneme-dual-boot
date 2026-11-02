@@ -74,7 +74,7 @@ Reproduce with [`lab/`](lab/README.en.md). All of it on a real dual-boot shared 
 | Commit cost | `journal_mode=delete`: **4.9–5.2 ms**; `wal`: **1.4–1.6 ms** (300 synchronous commits) | `delete`: **14.23 ms**; `wal`: **1.89 ms** (300 synchronous commits) | WAL wins on both; `delete` is ~7.5× more expensive on macOS |
 | Cost of a 152 MB handoff | read + write-with-fsync + sha256 ≈ **0.9–1.2 s** | read 283 ms + write with fsync 455 ms + sha256 1327 ms = **2066 ms (≈2.1 s)**, write verified | roughly one to two seconds per boot/shutdown |
 | ⚠️ Does the `-wal` file reach the disk? | original claim: a child committed 500 times in WAL mode and no `-wal` existed on disk (3 reproductions) | **explained: not the volume and not a driver flag — V8 GC collects the `DatabaseSync` handle and the connection is closed** (see conclusion 5; reproduce with `node lab/b5-gc.mjs <dir>`) | never use WAL presence/size as evidence |
-| A real database, checked | a few hundred MB, page 4096, freelist 4.5%, 22 tables, `integrity_check` = ok in 1141 ms | **a few hundred MB (plus a sub-MB WAL), page 4096, freelist 1.3%, 22 tables, `integrity_check` = ok** | for this size, a physical runs in about a second |
+| A real database, checked | a few hundred MB, page 4096, freelist 4.5%, `integrity_check` = ok in 1141 ms | **a few hundred MB (plus a sub-MB WAL), page 4096, freelist 1.3%, `integrity_check` = ok** | for this size, a physical runs in about a second; the table count is deliberately not listed — it tracks the plugin version, not the volume (see `docs/05` §6) |
 
 ### 🧠 Five conclusions
 

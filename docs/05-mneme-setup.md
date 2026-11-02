@@ -154,3 +154,45 @@ node handoff.mjs close E:/mneme --owner windows     # 0 = 干净封箱，可以�
 ```
 
 macOS 那头把 `E:/mneme` 换成 `/Volumes/<你的卷>/mneme`、`--owner` 换成 `macos`，其余一模一样。
+
+---
+
+## 6. 两端插件版本必须一致
+
+mneme 每次开库都会执行一整段 `CREATE TABLE IF NOT EXISTS` 加若干 `ALTER TABLE … ADD COLUMN`（全部幂等）。所以**插件版本决定了这份共享库的结构下限**：
+
+- 新版开库 → 库里多出新表/新列。旧版读到不认识的东西会忽略，不会坏库。
+- 旧版开库 → 不会删掉新表，但也不会往里写。
+
+后果不是数据损坏，是**状态分叉**。0.10.0 起 `distill_parse_failures`（解析失败 streak）、`distill_runs`、`memory_mints`、`conflict_reviewed`、`differentiated_pairs` 这几张表只会在装了新版的那一端累积。两端来回切，记忆治理状态就对不上。
+
+### 查两端版本
+
+```bash
+# Windows: %USERPROFILE%\.dsh\profiles\desktop\package.json
+# macOS:   ~/.dsh/profiles/desktop/package.json
+grep '@modusensus/dsh-mneme' "$HOME/.dsh/profiles/desktop/package.json"
+node -p "require(process.env.HOME + '/.dsh/profiles/desktop/node_modules/@modusensus/dsh-mneme/package.json').version"
+```
+
+### 升级顺序（顺序不能反）
+
+1. A 端升级插件，**然后重启 DSH** —— 只换 `node_modules` 而不重启，进程里跑的还是旧代码。
+2. 完整退出 DSH（含托盘），等 `-wal` 归零；daemon 也停（第 3 节两条命令都是空的）。
+3. `handoff.mjs close` 封箱。
+4. 进 B 端，先 `handoff.mjs open` 验一遍。
+5. B 端升到**同一个版本**，再开 DSH。
+6. 两端版本号对齐之后才恢复日常切换。
+
+### 版本暂时对不齐时
+
+别在两端交替写。库本身是安全的，会分叉的只有记忆治理状态；在落后的那端升级完成前，只在一端使用。
+
+### 升级前备份
+
+在当前持有库的那一端、DSH 退出之后，把三件套复制到该系统的本地盘：`memory.db`、`memory.db-wal`、`memory.db-shm`。备份用完就删，不要长期留在非共享盘上当第二真源（第 1 节）；也不要用 `cp` 抓一个正在被写的库。
+
+### 本仓库的脚本不用跟着改
+
+`lab/` 下的探针各自建一次性临时库，从不打开 mneme 的库；`handoff.mjs` 只跑三个通用 PRAGMA（`BEGIN IMMEDIATE` / `wal_checkpoint(TRUNCATE)` / `integrity_check`），不查任何表名或列名。所以插件升级**不需要改这些脚本** —— 会过期的是文档里写死的表数，所以上面那张表已经不写表数了。
+

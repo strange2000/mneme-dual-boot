@@ -79,7 +79,7 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 | 提交成本 | `journal_mode=delete`：**4.9–5.2 ms/次**；`wal`：**1.4–1.6 ms/次** | `delete`：**14.23 ms/次**；`wal`：**1.89 ms/次**（300 次同步提交） | 两端 WAL 都快；macOS 上 `delete` 模式尤其贵（约 7.5×） |
 | 152 MB 交接成本 | 读 + 写含 fsync + sha256 ≈ **0.9–1.2 秒** | 读 283 ms + 写含 fsync 455 ms + sha256 1327 ms = **2066 ms（≈2.1 秒）**，写后校验通过 | 每次开关机付 1–2 秒，可接受 |
 | ⚠️ WAL 文件是否落盘 | 原文：子进程 WAL 提交 500 次后盘上无 `-wal`，数据已在主文件（复现 3 次） | **已查明：不是卷、不是驱动参数，是 V8 GC 回收 `DatabaseSync` 后连接被关闭**（见结论 5，一键复现：`node lab/b5-gc.mjs <目录>`） | 不要用 WAL 文件的存在性做任何判断 |
-| 真实库体检 | 数百 MB、page 4096、freelist 4.5%、22 张表、`integrity_check` = ok / 1141 ms | **数百 MB（另有 1 MB 以下的 WAL）、page 4096、freelist 1.3%、22 张表、`integrity_check` = ok** | 这个规模的库，体检成本 1 秒级 |
+| 真实库体检 | 数百 MB、page 4096、freelist 4.5%、`integrity_check` = ok / 1141 ms | **数百 MB（另有 1 MB 以下的 WAL）、page 4096、freelist 1.3%、`integrity_check` = ok** | 这个规模的库，体检成本 1 秒级；表数刻意不写——它跟插件版本走，不是卷的性质（见 `docs/05` 第 6 节） |
 
 ### 🧠 五个结论
 

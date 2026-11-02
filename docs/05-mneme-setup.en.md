@@ -154,3 +154,45 @@ node handoff.mjs close E:/mneme --owner windows     # 0 = sealed cleanly, you ma
 ```
 
 On the macOS side, swap `E:/mneme` for `/Volumes/<your-volume>/mneme` (whatever the shared volume is mounted as) and `--owner` for `macos`; everything else is identical.
+
+---
+
+## 6. Both ends must run the same plugin version
+
+Every time mneme opens the database it executes a whole block of `CREATE TABLE IF NOT EXISTS` plus a number of `ALTER TABLE … ADD COLUMN` (all idempotent). The plugin version therefore sets the **structural floor** of the shared database:
+
+- A newer version opening it → new tables/columns appear. An older version ignores what it does not recognise; nothing breaks.
+- An older version opening it → it will not drop the new tables, it just never writes them.
+
+The consequence is not corruption, it is **state divergence**. Since 0.10.0, `distill_parse_failures` (the parse-failure streak), `distill_runs`, `memory_mints`, `conflict_reviewed` and `differentiated_pairs` only accumulate on the end that runs the newer version. Switch back and forth and the memory-governance state stops matching.
+
+### Checking the version on each end
+
+```bash
+# Windows: %USERPROFILE%\.dsh\profiles\desktop\package.json
+# macOS:   ~/.dsh/profiles/desktop/package.json
+grep '@modusensus/dsh-mneme' "$HOME/.dsh/profiles/desktop/package.json"
+node -p "require(process.env.HOME + '/.dsh/profiles/desktop/node_modules/@modusensus/dsh-mneme/package.json').version"
+```
+
+### Upgrade order (it does not commute)
+
+1. Upgrade the plugin on end A, **then restart DSH** — swapping `node_modules` without a restart leaves the old code running in the process.
+2. Exit DSH completely (tray included) and wait for `-wal` to reach zero; the daemon too (both commands in §3 come back empty).
+3. `handoff.mjs close` to seal it.
+4. Boot end B and run `handoff.mjs open` first, as always.
+5. Upgrade end B to the **same version**, then start DSH.
+6. Only once the two versions match, resume the normal switch cycle.
+
+### While the versions still differ
+
+Do not alternate writes between the ends. The database itself is safe; only the governance state diverges. Until the lagging end is upgraded, use one end only.
+
+### Back up before upgrading
+
+On the end that currently holds the database, after DSH has exited, copy the three files to that system's local disk: `memory.db`, `memory.db-wal`, `memory.db-shm`. Delete the copy when you are done — do not leave it on a non-shared disk as a second source of truth (§1). And do not `cp` a database that is being written to.
+
+### The scripts in this repository do not need to change
+
+The probes under `lab/` each build a throwaway database and never open mneme's; `handoff.mjs` only runs three generic PRAGMAs (`BEGIN IMMEDIATE` / `wal_checkpoint(TRUNCATE)` / `integrity_check`) and never looks at a table or column name. Upgrading the plugin therefore **needs no script changes** — what goes stale is a hard-coded table count in the docs, which is why the table above no longer lists one.
+
