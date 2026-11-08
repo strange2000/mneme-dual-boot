@@ -127,6 +127,8 @@ mklink  C:\Users\me\.app\state.db X:\state.db      # Windows
 
 ---
 
+> 📦 **不想 clone？** 直接下发布包：[`mneme-dual-boot-0.1.1.zip`](https://github.com/strange2000/mneme-dual-boot/releases/latest) —— 协议文档（`docs/01`–`05`）+ 参考实现 + 探针脚本。解压后跑 `node lab/handoff-selftest.mjs <目录>`（18 个断言，几秒钟）。需要 Node ≥ 22，不用 `npm i`。
+
 ## 🧰 参考实现：`handoff.mjs`
 
 零依赖，单个文件，Node ≥ 22（只用 `node:sqlite` / `node:crypto` / `node:fs`）。把它拷到任何地方就能跑，不需要 npm install。

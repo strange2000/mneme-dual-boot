@@ -122,6 +122,8 @@ The generation (`gen`) is **an integer you increment yourself**, not a timestamp
 
 ---
 
+> 📦 **Don't want to clone?** Download the package: [`mneme-dual-boot-0.1.1.zip`](https://github.com/strange2000/mneme-dual-boot/releases/latest) — protocol docs (`docs/01`–`05`), the reference implementation, and the probe scripts. Extract, then run `node lab/handoff-selftest.mjs <dir>` (18 assertions, a few seconds). Node ≥ 22, no `npm i`.
+
 ## 🧰 Reference implementation: `handoff.mjs`
 
 Zero dependencies, one file, Node ≥ 22 (uses `node:sqlite`, `node:crypto`, `node:fs`). Copy it anywhere and run it; there is nothing to install.
